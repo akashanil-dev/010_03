@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from .extract import extract_fields
-from .parsing import classify, to_markdown
+from .parsing import classify, source_format, to_markdown
 from .schemas import ExtractedField, ParsedDocument
 
 CACHE = Path(__file__).resolve().parent.parent / "data" / "cache"
@@ -41,6 +41,7 @@ def process_file(path: Path, filename: str | None = None, cache_key: str | None 
     doc_type = classify(text)
     fields = _extract_cached(doc_type, text) if doc_type else {}
     doc = ParsedDocument(filename=filename or path.name, doc_type=doc_type, text=text, ocr_used=ocr,
+                         source_format=source_format(path, ocr),
                          fields=fields, seconds=round(time.time() - t0, 1))
     cached.write_text(doc.model_dump_json())
     return doc

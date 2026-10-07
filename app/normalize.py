@@ -113,11 +113,14 @@ def incoterm(raw: str | None) -> str | None:
 
 
 def reference(raw: str | None) -> str | None:
-    """'KME/EXP/26-27/0093 dt 18-Sep-2026' -> 'KME/EXP/26-27/0093'"""
+    """'KME/EXP/26-27/0093 dt 18-Sep-2026' -> 'KME/EXP/26-27/0093'; 'Invoice No.: X/1' -> 'X/1'"""
     if not raw:
         return None
-    token = raw.strip().split()[0]
-    return token.upper().rstrip(",;") or None
+    text = raw.split(":", 1)[1] if re.match(r"^\s*[A-Za-z .']+:", raw) else raw
+    for token in text.split():
+        if re.search(r"\d", token):
+            return token.upper().rstrip(",;") or None
+    return None
 
 
 def container(raw: str | None) -> str | None:

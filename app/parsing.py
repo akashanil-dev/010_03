@@ -1,4 +1,9 @@
-"""PDF to text with Docling. OCR only runs for pages without a text layer."""
+"""Documents to text with Docling.
+
+PDFs: OCR only runs for pages without a text layer.
+Images (photos, scans): wrapped in a PDF and OCR'd.
+Excel, Word, CSV: read directly, so the text is exact and no OCR is needed.
+"""
 
 import re
 from functools import lru_cache
@@ -33,11 +38,50 @@ def has_text_layer(path: Path) -> bool:
         return sum(len(page.get_text().strip()) for page in pdf) > 50
 
 
+IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+OFFICE_TYPES = {".xlsx", ".xls", ".ods", ".docx", ".doc", ".odt", ".csv"}
+SUPPORTED = {".pdf"} | IMAGE_TYPES | OFFICE_TYPES
+FORMAT_LABEL = {".xlsx": "Excel", ".xls": "Excel", ".ods": "Spreadsheet", ".docx": "Word", ".doc": "Word",
+                ".odt": "Document", ".csv": "CSV"}
+
+
+def image_to_pdf(path: Path) -> Path:
+    """Wrap a photo or scanned image in a one-page PDF, so it goes through the scan (OCR) path."""
+    out = path.with_name(path.name + ".pdf")
+    with pymupdf.open(path) as img:
+        pdf_bytes = img.convert_to_pdf()
+    with pymupdf.open("pdf", pdf_bytes) as pdf:
+        pdf.save(out)
+    return out
+
+
 def to_markdown(path: Path) -> tuple[str, bool]:
-    """Return (markdown, ocr_used)."""
-    ocr = not has_text_layer(path)
-    result = _converter(ocr).convert(str(path))
+    """Return (markdown, ocr_used) for any supported file."""
+    suffix = path.suffix.lower()
+    if suffix in IMAGE_TYPES:
+        pdf = image_to_pdf(path)
+        try:
+            result = _converter(True).convert(str(pdf))
+        finally:
+            pdf.unlink(missing_ok=True)
+        ocr = True
+    elif suffix in OFFICE_TYPES:
+        result = _converter(False).convert(str(path))
+        ocr = False
+    else:
+        ocr = not has_text_layer(path)
+        result = _converter(ocr).convert(str(path))
     return mask_contacts(compact(result.document.export_to_markdown())), ocr
+
+
+def source_format(path: Path, ocr: bool) -> str:
+    """How the document arrived, shown to the reviewer as a hint of how reliable the reading is."""
+    suffix = path.suffix.lower()
+    if suffix in IMAGE_TYPES:
+        return "Photo / image, OCR used"
+    if suffix in FORMAT_LABEL:
+        return f"{FORMAT_LABEL[suffix]} file, read directly"
+    return "Scanned PDF, OCR used" if ocr else "Digital PDF, text layer"
 
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")

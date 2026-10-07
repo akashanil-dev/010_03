@@ -31,7 +31,7 @@ def build(docs: list[ParsedDocument]) -> dict:
         "documents": [{
             "filename": d.filename, "doc_type": d.doc_type,
             "doc_name": DOC_TYPES.get(d.doc_type, "Unrecognised document"),
-            "ocr_used": d.ocr_used, "seconds": d.seconds,
+            "ocr_used": d.ocr_used, "seconds": d.seconds, "source_format": d.source_format,
             "unverified": [FIELDS[k][0] for k, f in d.fields.items() if f.raw and not f.verified],
             "fields": {k: {"label": FIELDS[k][0], "raw": f.raw, "evidence": f.evidence, "verified": f.verified}
                        for k, f in d.fields.items()},

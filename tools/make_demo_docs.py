@@ -4,6 +4,7 @@ Produces three sets under data/demo/:
   clean/    six consistent documents
   errors/   the same six documents with 8 planted issues
   bundle/   the scanned set merged into one PDF
+  mixed/    errors set with an Excel invoice and a phone-photo packing list
   scanned/  the errors set, with the packing list as an image-only "scan"
 
 All companies, people and ID numbers are fictitious.
@@ -215,6 +216,60 @@ def make_scan(src: Path, dst: Path) -> None:
     out.save(dst)
 
 
+def make_invoice_xlsx(d: dict, dst: Path) -> None:
+    """The commercial invoice as an exporter would prepare it in Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoice"
+    inc = d.get("inv_incoterms", d["incoterms"])
+    rows = [
+        ["COMMERCIAL INVOICE"],
+        [d["exporter"]],
+        [d["exporter_addr"]],
+        [f"IEC {d['iec']} | GSTIN {d['gstin']} | MPEDA Reg. {d['mpeda']}"],
+        [],
+        ["Invoice No.", d["inv_no"]],
+        ["Invoice date", d["inv_date"]],
+        ["Buyer / Consignee", f"{d['buyer']}, {d['buyer_addr']}"],
+        ["Buyer's order", f"{d['po_no']} dt {d['po_date']}"],
+        ["Incoterms", inc],
+        ["Port of loading", d["pol"]],
+        ["Port of discharge", d["pod"]],
+        ["Vessel", d["vessel"]],
+        [],
+        ["Marks", "Description of goods", "ITC-HS", "Cartons", "Net kg", "USD/kg", "Amount USD"],
+        ["KME/NHF-0418", d["desc"], d["hs"], d["cartons"], d["net"], d["rate"], d["total"]],
+        [f"Total {inc}", "", "", "", "", "", d["total"]],
+        ["Less: ocean freight", "", "", "", "", "", d["freight"]],
+        ["FOB value", "", "", "", "", "", d["fob"]],
+        [],
+        [d["lut_line"] or "Country of origin: India."],
+        ["For " + d["exporter"] + ", Authorised Signatory"],
+    ]
+    for r in rows:
+        ws.append(r)
+    ws["A1"].font = Font(bold=True, size=14)
+    for col, width in zip("ABCDEFG", (22, 60, 12, 10, 12, 10, 14)):
+        ws.column_dimensions[col].width = width
+    wb.save(dst)
+
+
+def make_phone_photo(src: Path, dst: Path) -> None:
+    """A packing list photographed with a phone: tilted, uneven light, JPEG."""
+    pdf = pymupdf.open(src)
+    pix = pdf[0].get_pixmap(dpi=170)
+    img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    img = img.rotate(-3.5, expand=True, fillcolor=(120, 110, 95), resample=Image.BICUBIC)
+    w, h = img.size
+    shade = Image.linear_gradient("L").resize((w, h)).point(lambda v: 255 - v // 4)
+    img = Image.composite(img, Image.new("RGB", (w, h), (60, 55, 50)), shade)
+    img = img.filter(ImageFilter.GaussianBlur(0.8))
+    img.save(dst, format="JPEG", quality=72)
+
+
 def main() -> None:
     errors = copy.deepcopy(CLEAN) | ERRORS
     for name, data in (("clean", CLEAN), ("errors", errors)):
@@ -240,7 +295,19 @@ def main() -> None:
         with pymupdf.open(scanned / fname) as part:
             merged.insert_pdf(part)
     merged.save(bundle / "shipment_KME-0093_all_documents.pdf")
+    make_mixed(errors)
     print(f"Wrote demo sets to {OUT}")
+
+
+def make_mixed(errors: dict) -> None:
+    """mixed/: errors set with the invoice as Excel and the packing list as a phone photo."""
+    mixed = OUT / "mixed"
+    mixed.mkdir(parents=True, exist_ok=True)
+    for fname in DOCS:
+        if fname not in ("02_commercial_invoice.pdf", "03_packing_list.pdf"):
+            (mixed / fname).write_bytes((OUT / "errors" / fname).read_bytes())
+    make_invoice_xlsx(errors, mixed / "02_commercial_invoice.xlsx")
+    make_phone_photo(OUT / "errors" / "03_packing_list.pdf", mixed / "03_packing_list_photo.jpg")
 
 
 if __name__ == "__main__":

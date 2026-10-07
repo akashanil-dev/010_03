@@ -51,4 +51,5 @@ def test_normalisers():
     assert not N.hs_equal(N.hs_code("03061740"), N.hs_code("03061720"))
     assert N.container("KYLU 482913-0 / EIA 0048213") == N.container("KYLU4829130")
     assert N.reference("KME/EXP/26-27/0093 dt 18-Sep-2026") == "KME/EXP/26-27/0093"
+    assert N.reference("Invoice No.: KME/EXP/26-27/0093") == "KME/EXP/26-27/0093"   # label leaked by the model
     assert str(N.parse_date("18-09-2026")) == str(N.parse_date("18-Sep-2026")) == "2026-09-18"

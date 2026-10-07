@@ -12,13 +12,16 @@ const STATUS_LABEL = { error: "ERROR", warning: "WARNING", pass: "PASS", skipped
 
 const NUMERIC_ROWS = new Set(["cartons", "net_weight", "gross_weight", "fob_value", "hs_code"]);
 
+const ACCEPTED = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "xlsx", "xls", "ods", "docx", "doc", "odt", "csv"];
 let selected = [];
 let current = null;   // latest shipment payload
 let pollTimer = null;
 
 /* ---------- views ---------- */
 function show(view) {
-  for (const v of ["upload", "processing", "results"]) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ["upload", "processing", "results", "dashboard"]) $(`#view-${v}`).hidden = v !== view;
+  $("#nav-new").classList.toggle("active", view === "upload");
+  $("#nav-dashboard").classList.toggle("active", view === "dashboard");
   window.scrollTo(0, 0);
 }
 
@@ -38,7 +41,8 @@ function renderFileList() {
 
 function addFiles(files) {
   for (const f of files) {
-    if (!f.name.toLowerCase().endsWith(".pdf")) { alert(`${f.name} is not a PDF.`); continue; }
+    const ext = f.name.toLowerCase().split(".").pop();
+    if (!ACCEPTED.includes(ext)) { alert(`${f.name}: unsupported file type. Use PDF, image, Excel, Word or CSV.`); continue; }
     if (!selected.some((s) => s.name === f.name)) selected.push(f);
   }
   renderFileList();
@@ -71,6 +75,12 @@ function track(id, tab) {
     const res = await fetch(`/api/shipments/${id}`);
     if (!res.ok) { clearInterval(pollTimer); alert("This shipment no longer exists."); goHome(); return; }
     current = await res.json();
+    if (current.state === "interrupted") {
+      clearInterval(pollTimer);
+      alert("This check was interrupted by a server restart. Please upload the documents again.");
+      goHome();
+      return;
+    }
     if (current.state === "done") {
       clearInterval(pollTimer);
       renderResults();
@@ -89,7 +99,7 @@ function renderProgress() {
     let meta = "Waiting";
     if (f.state === "splitting") meta = "Checking whether this file holds several documents…";
     if (f.state === "reading") meta = `Reading… ${Math.round(f.elapsed || 0)} s`;
-    if (f.state === "done") meta = `${esc(DOC_SHORT[f.doc_type] || "Unrecognised")}${f.ocr_used ? " · scanned, OCR used" : ""} · ${f.seconds < 1 ? "from cache" : f.seconds + " s"}`;
+    if (f.state === "done") meta = `${esc(DOC_SHORT[f.doc_type] || "Unrecognised")}${f.source_format ? " · " + esc(f.source_format) : ""} · ${f.seconds < 1 ? "from cache" : f.seconds + " s"}`;
     if (f.state === "error") meta = `Could not read: ${esc(f.error)}`;
     const from = f.bundle ? `<br><span class="muted" style="font-size:12px">from ${esc(f.bundle)}, page ${f.pages.join("–")}</span>` : "";
     const icon = f.state === "splitting" ? "reading" : f.state;
@@ -291,7 +301,7 @@ function renderDocuments() {
       <h3>${esc(d.doc_name)}</h3>
       <div class="mono muted" style="font-size:13px">${esc(d.filename)}</div>
       <div class="badges">
-        <span class="badge">${d.ocr_used ? "Scanned · OCR used" : "Digital PDF · text layer"}</span>
+        <span class="badge ${d.ocr_used ? "warn" : ""}">${esc(d.source_format || (d.ocr_used ? "Scanned, OCR used" : "Digital PDF"))}</span>
         <span class="badge">${d.seconds ? `read in ${d.seconds} s` : "from cache"}</span>
         <span class="badge">${Object.values(d.fields).filter((f) => f.raw).length} fields extracted</span>
         ${d.unverified.length ? `<span class="badge warn">${d.unverified.length} not found word for word</span>` : `<span class="badge">all values verified in source</span>`}
@@ -302,7 +312,7 @@ function renderDocuments() {
         ${Object.values(d.fields).map((f) => `<tr><td>${esc(f.label)}</td><td class="v">${esc(f.raw ?? "—")}</td><td class="evidence">${f.raw ? (f.verified ? "✓ found" : "not found") : ""}</td></tr>`).join("")}
         </tbody></table>
       </details>
-      <p style="margin-top:12px"><a class="btn small" target="_blank" href="/api/shipments/${current.id}/files/${encodeURIComponent(d.filename)}">Open PDF</a></p>
+      <p style="margin-top:12px"><a class="btn small" target="_blank" href="/api/shipments/${current.id}/files/${encodeURIComponent(d.filename)}">Open original file</a></p>
     </div>`).join("")}</div>`;
 }
 
@@ -361,6 +371,55 @@ function printReport() {
   w.document.close();
 }
 
+/* ---------- dashboard ---------- */
+const VERDICT_TEXT = { blocked: "BLOCKED", review: "REVIEW", ready: "READY" };
+
+function bars(items, hot) {
+  const max = Math.max(1, ...items.map((i) => i.count));
+  return `<div class="bars">${items.map((i, n) => `
+    <div class="bar-row"><div class="bar-label"><span>${esc(i.label)}</span>
+      <div class="bar-track"><div class="bar-fill ${hot && n === 0 ? "hot" : ""}" style="width:${(100 * i.count) / max}%"></div></div></div>
+      <b>${i.count}</b></div>`).join("")}</div>`;
+}
+
+async function openDashboard() {
+  clearInterval(pollTimer);
+  history.replaceState(null, "", "#dashboard");
+  show("dashboard");
+  const d = await (await fetch("/api/dashboard")).json();
+  if (!d.shipments) {
+    $("#dash-body").innerHTML = `<div class="empty-state" style="margin-top:18px">No shipments checked yet. Run a check and it will appear here.</div>`;
+    return;
+  }
+  const top = d.by_document[0];
+  $("#dash-body").innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>${d.shipments}</b><span>shipments checked</span></div>
+      <div class="kpi"><b>${d.documents}</b><span>documents read</span></div>
+      <div class="kpi"><b>${d.flags}</b><span>issues caught before filing</span></div>
+      <div class="kpi blocked"><b>${d.verdicts.blocked}</b><span>blocked</span></div>
+      <div class="kpi review"><b>${d.verdicts.review}</b><span>needed review</span></div>
+      <div class="kpi ready"><b>${d.verdicts.ready}</b><span>ready to file</span></div>
+    </div>
+    <div class="dash-grid">
+      <div class="card"><h3>Which document is wrong most often</h3>
+        <p class="muted">Counts the documents each issue points to as the likely outlier.${top ? ` Most issues come from the <b>${esc(top.owner)}</b>.` : ""}</p>
+        ${d.by_document.length ? bars(d.by_document.map((x) => ({ label: `${DOC_SHORT[x.doc_type] || x.doc_type} · ${x.owner}`, count: x.count })), true) : '<p class="muted">No issues yet.</p>'}</div>
+      <div class="card"><h3>Most common issues</h3>
+        <p class="muted">Where the documentation process needs attention.</p>
+        ${d.top_issues.length ? bars(d.top_issues.map(([label, count]) => ({ label, count })), false) : '<p class="muted">No issues yet.</p>'}</div>
+    </div>
+    <h3>Recent shipments</h3>
+    <table class="recent"><thead><tr><th>Checked</th><th>Shipment</th><th>Result</th><th>Errors</th><th>Warnings</th><th>Documents</th><th>Flags reviewed</th></tr></thead><tbody>
+    ${d.recent.map((s) => `<tr class="click" data-open="${esc(s.id)}">
+      <td class="mono">${new Date(s.created * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</td>
+      <td>${esc(s.label)}</td><td><span class="vtag ${s.verdict}">${VERDICT_TEXT[s.verdict]}</span></td>
+      <td class="mono">${s.counts.errors}</td><td class="mono">${s.counts.warnings}</td><td class="mono">${s.documents}</td>
+      <td class="mono">${s.reviewed}/${s.counts.errors + s.counts.warnings}</td></tr>`).join("")}
+    </tbody></table>`;
+  $$("[data-open]").forEach((r) => r.onclick = () => track(r.dataset.open));
+}
+
 /* ---------- wiring ---------- */
 function init() {
   const dz = $("#dropzone");
@@ -376,8 +435,12 @@ function init() {
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") closeDrawer(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
   $("#home-link").onclick = goHome;
+  $("#nav-new").onclick = goHome;
+  $("#nav-dashboard").onclick = openDashboard;
   const [id, tab] = location.hash.slice(1).split(":");
-  if (id) track(id, tab); else show("upload");
+  if (id === "dashboard") openDashboard();
+  else if (id) track(id, tab);
+  else show("upload");
 }
 
 init();

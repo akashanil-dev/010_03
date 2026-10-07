@@ -94,5 +94,6 @@ class ParsedDocument(BaseModel):
     doc_type: str | None
     text: str                  # markdown text from Docling
     ocr_used: bool
+    source_format: str = ""
     fields: dict[str, ExtractedField] = {}
     seconds: float = 0.0

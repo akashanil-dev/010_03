@@ -14,6 +14,10 @@
     <span class="logo">Tally</span>
     <span class="tagline">Export document verification</span>
   </div>
+  <nav class="mainnav">
+    <button class="navlink" id="nav-new">New check</button>
+    <button class="navlink" id="nav-dashboard">Dashboard</button>
+  </nav>
   <div class="privacy-badge" title="Documents are read by an AI model running on this computer. Nothing is sent to an external service.">
     <span class="dot"></span> Local AI · documents stay on this machine
   </div>
@@ -31,9 +35,9 @@
     <div class="upload-grid">
       <div class="card">
         <label id="dropzone" class="dropzone" for="file-input">
-          <input id="file-input" type="file" accept="application/pdf" multiple hidden>
-          <strong>Drop PDFs here</strong>
-          <span>Separate files or one merged PDF of the whole set. Scans are fine.</span>
+          <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.xlsx,.xls,.ods,.docx,.doc,.odt,.csv" multiple hidden>
+          <strong>Drop documents here</strong>
+          <span>PDF, photo (JPG, PNG), Excel, Word or CSV. Separate files or one merged PDF. Scans are fine.</span>
         </label>
         <ul id="file-list" class="file-list"></ul>
         <div class="row-actions">
@@ -49,6 +53,7 @@
         <button class="btn demo" data-demo="errors"><b>With planted errors</b><span>8 issues hidden across 6 documents</span></button>
         <button class="btn demo" data-demo="scanned"><b>Errors + scanned packing list</b><span>One document is an image-only scan</span></button>
         <button class="btn demo" data-demo="bundle"><b>All 6 documents in one PDF</b><span>A merged bundle, split automatically</span></button>
+        <button class="btn demo" data-demo="mixed"><b>Mixed formats</b><span>Excel invoice, phone-photo packing list, PDFs</span></button>
         <button class="btn demo" data-demo="clean"><b>Clean shipment</b><span>Everything should match</span></button>
       </div>
     </div>
@@ -60,6 +65,13 @@
     <h2>Reading each document and extracting every field</h2>
     <p class="muted">The model runs on this laptop's CPU, so a new document takes about a minute. Documents seen before load instantly.</p>
     <ol id="progress-list" class="progress-list"></ol>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="view-dashboard" class="view" hidden>
+    <p class="eyebrow">SUMMARY DASHBOARD</p>
+    <h2>All shipments checked</h2>
+    <div id="dash-body"></div>
   </section>
 
   <!-- Results -->
