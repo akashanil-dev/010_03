@@ -12,6 +12,10 @@ Tally reads the documents of an export shipment (purchase order, commercial invo
 - **Shipment Truth Matrix:** every shared field across every document on one screen; the likely wrong value is highlighted; click a value to see the exact text it was read from.
 - **Issues with evidence:** plain-English explanation, suggested fix, each document's value and source text; **confirm or override** with a note (overrides require one), recorded in an **audit log**.
 - **Export readiness checklist:** product detected from the HS code, destination from the port. Checks core documents, IEC, GSTIN, LUT reference and its financial year, MPEDA registration, and the EIC health certificate for seafood to the EU. Uncertain items are marked *check* rather than asserted.
+- **Letter of credit compliance (UCP 600):** upload the LC and Tally checks the whole set against its terms before it goes to the bank: amount within the credit plus tolerance, shipment by the latest shipment date, presentation deadline, ports, Incoterms, invoice description corresponding with the credit, beneficiary/applicant, and the documents the LC requires. A set that agrees with itself can still break the LC; this catches that.
+- **Lab result screening:** reads the results on quality / health certificates. A detected banned antibiotic (chloramphenicol, nitrofurans and their metabolites, malachite green) or ethylene oxide above the EU limit of 0.1 mg/kg is flagged as a blocking error. Plain rules, no AI.
+- **Money and deadlines:** flags a shipping bill that claims no RoDTEP or drawback (the claim must be made on the shipping bill), and shows the 3-month amendment window and the 15-month export-proceeds deadline.
+- **New rules for Kerala products:** EUDR due diligence for natural rubber to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
 - **Send fixes to the right team:** issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker, documentation) with one-tap **WhatsApp**, email or copy.
 - **Malayalam:** issue text and fix messages can be switched to Malayalam for warehouse and floor staff.
 - **Summary dashboard:** shipments checked, ready / review / blocked, the most common issues, and **which document and team causes the most errors**. History is stored in SQLite.
@@ -81,6 +85,8 @@ pytest -q
 | **Across documents** | cartons, net and gross weight, HS code, exporter, consignee, IEC, GSTIN, ports of loading and discharge, Incoterms, container, FOB value, invoice and PO references, goods description (fuzzy match, warning only) |
 | **Within a document** | invoice: quantity × rate = total, total − freight = FOB; packing list: cartons × weight per carton = total weight |
 | **Compliance** | required documents present; LUT ARN on the invoice when the shipping bill declares export under LUT; date order (PO ≤ invoice ≤ shipping bill, invoice ≤ certificate of origin) |
+| **Letter of credit** | amount and tolerance, currency, latest shipment date, presentation deadline and expiry, ports, Incoterms, invoice description, beneficiary and applicant, required documents |
+| **Lab results** | banned antibiotics detected, ethylene oxide above the EU limit |
 
 Format differences are **normalised first, not flagged**: `12.000 MTS` = `12,000 kg`, `1200 CTNS` = `1,200 cartons`, `Pvt. Ltd.` = `Private Limited`, `0306.17.20` = `03061720`.
 
@@ -116,7 +122,9 @@ PDF ──► Docling (layout, tables, OCR)
 |---|---|
 | `app/parsing.py` | Docling conversion for all formats, photo straightening, table compaction, contact masking, classification |
 | `app/splitting.py` | Splits a merged PDF into one document per type |
-| `app/readiness.py` | Export readiness checklist by product and destination |
+| `app/readiness.py` | Export readiness checklist by product and destination, incentives and key dates |
+| `app/lc.py` | Letter of credit compliance checks |
+| `app/labtests.py` | Lab result screening on certificates |
 | `app/store.py` | SQLite history and dashboard statistics |
 | `app/extract.py` | LLM field extraction and source-text verification |
 | `app/llm.py` | Provider switch: local Ollama (default) or IBM watsonx |
@@ -133,7 +141,7 @@ PDF ──► Docling (layout, tables, OCR)
 
 ## Results on the demo shipment
 
-The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six documents written by the team, with fictitious companies. It comes in five sets: `clean`, `errors` (8 planted issues), `scanned` (image-only packing list), `mixed` (Excel invoice and phone-photo packing list) and `bundle` (all six in one PDF). Measured on a laptop CPU (Intel i5-1240P, no GPU), granite4:micro via Ollama:
+The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six documents written by the team, with fictitious companies. It comes in seven sets: `clean`, `errors` (8 planted issues), `scanned` (image-only packing list), `mixed` (Excel invoice and phone-photo packing list), `bundle` (all six in one PDF), `quality` (a lab certificate reporting a nitrofuran) and `lc` (the clean set plus a letter of credit it breaks). Measured on a laptop CPU (Intel i5-1240P, no GPU), granite4:micro via Ollama:
 
 | Set | Result |
 |---|---|
