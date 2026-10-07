@@ -187,10 +187,11 @@ function renderMatrix() {
     const cells = m.columns.map((c, ci) => {
       const cell = row.cells[c.doc_type];
       if (!cell) return `<td><span class="cell empty">—</span></td>`;
-      const cls = cell.status === "mismatch" ? "mismatch" : "";
+      const vague = cell.status === "mismatch" && row.status === "warning";   // warnings are "too vague", not wrong
+      const cls = cell.status === "mismatch" ? (vague ? "vague" : "mismatch") : "";
       const shown = NUMERIC_ROWS.has(row.key) ? (cell.display ?? cell.raw) : cell.raw;
-      const tag = cell.status === "mismatch" ? `<span class="tag">Likely wrong</span>` : (!cell.verified ? `<span class="tag unverified">Not found in source</span>` : "");
-      return `<td><button class="cell ${cls}" data-r="${ri}" data-c="${ci}" title="${esc(cell.raw)}">${esc(shown)}${tag}</button></td>`;
+      const tag = cell.status === "mismatch" ? `<span class="tag">${vague ? "Too vague" : "Likely wrong"}</span>` : (!cell.verified ? `<span class="tag unverified">Not found in source</span>` : "");
+      return `<td class="${cls ? "td-" + cls : ""}"><button class="cell ${cls}" data-r="${ri}" data-c="${ci}" title="${esc(cell.raw)}">${esc(shown)}${tag}</button></td>`;
     }).join("");
     const st = row.status;
     const label = { error: "Mismatch", warning: "Check wording", pass: "Agrees", skipped: "", info: "" }[st] || "";
@@ -199,6 +200,7 @@ function renderMatrix() {
   $("#tab-matrix").innerHTML = `
     <div class="legend">
       <span><i style="background:var(--red-bg);box-shadow:inset 3px 0 0 var(--red)"></i>Likely wrong value</span>
+      <span><i style="background:var(--amber-bg);box-shadow:inset 3px 0 0 var(--amber)"></i>Too vague (warning)</span>
       <span>Columns follow the document hierarchy: the purchase order is the source of truth.</span>
       <span>Click any value to see where it was read.</span>
     </div>

@@ -138,15 +138,18 @@ table.matrix { border-collapse: collapse; width: 100%; min-width: 980px; }
 .matrix thead th small { display: block; color: #9FB2C6; font-weight: 400; font-family: var(--mono); font-size: 11px; }
 .matrix th.field { padding: 12px; width: 170px; font-size: 14px; background: #F1EADF; }
 .matrix thead th.field { background: var(--navy-2); color: var(--paper); }
-.matrix td { height: 1px; }
 .matrix th.field .rowstatus { display: block; font-family: var(--mono); font-size: 11px; font-weight: 600; margin-top: 2px; }
 .rowstatus.error { color: var(--red); }
 .rowstatus.warning { color: var(--amber); }
 .rowstatus.pass { color: var(--green); }
 .rowstatus.info, .rowstatus.skipped { color: var(--muted); }
-.cell { display: block; width: 100%; height: 100%; min-height: 52px; text-align: left; border: none; background: transparent; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.cell { display: block; width: 100%; min-height: 52px; word-break: break-word; text-align: left; border: none; background: transparent; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: var(--ink); }
 .cell:hover { background: #fff; }
-.cell.mismatch { background: var(--red-bg); color: var(--red); font-weight: 600; box-shadow: inset 3px 0 0 var(--red); }
+.matrix td.td-mismatch { background: var(--red-bg); box-shadow: inset 3px 0 0 var(--red); }
+.matrix td.td-vague { background: var(--amber-bg); box-shadow: inset 3px 0 0 var(--amber); }
+.cell.mismatch { color: var(--red); font-weight: 600; }
+.cell.vague { color: var(--amber); font-weight: 600; }
+.cell.mismatch:hover, .cell.vague:hover { background: transparent; text-decoration: underline; }
 .cell.empty { color: #A9A398; cursor: default; }
 .cell .tag { display: block; font-family: var(--sans); font-size: 11px; font-weight: 600; margin-top: 3px; }
 .cell .unverified { color: var(--amber); }
