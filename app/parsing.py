@@ -1,5 +1,6 @@
 """PDF to text with Docling. OCR only runs for pages without a text layer."""
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -36,7 +37,16 @@ def to_markdown(path: Path) -> tuple[str, bool]:
     """Return (markdown, ocr_used)."""
     ocr = not has_text_layer(path)
     result = _converter(ocr).convert(str(path))
-    return compact(result.document.export_to_markdown()), ocr
+    return mask_contacts(compact(result.document.export_to_markdown())), ocr
+
+
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+PHONE = re.compile(r"(?:(?:tel|phone|mob|mobile|ph|fax)\.?\s*:?\s*|\+)\d[\d\s()-]{7,}\d", re.IGNORECASE)
+
+
+def mask_contacts(text: str) -> str:
+    """Hide personal contact details before the text is stored or sent to the model (DPDP Act 2023)."""
+    return PHONE.sub("[phone hidden]", EMAIL.sub("[email hidden]", text))
 
 
 def _cells(line: str) -> list[str]:
