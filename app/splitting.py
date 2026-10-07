@@ -9,12 +9,14 @@ from pathlib import Path
 
 import pymupdf
 
-from .parsing import TITLE_KEYWORDS, to_markdown
+from .parsing import TITLE_KEYWORDS, is_letter_of_credit, to_markdown
 
 HEAD_CHARS = 400
 
 
 def _page_type(text: str) -> str | None:
+    if is_letter_of_credit(text):
+        return "letter_of_credit"
     head = text[:HEAD_CHARS].upper()
     for doc_type, words in TITLE_KEYWORDS:
         if any(w in head for w in words):

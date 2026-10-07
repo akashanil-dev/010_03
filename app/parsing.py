@@ -168,8 +168,18 @@ def compact(markdown: str) -> str:
     return "\n".join(l for i, l in enumerate(out) if l.strip() or (i and out[i - 1].strip()))
 
 
+LC_TITLES = ["DOCUMENTARY CREDIT", "LETTER OF CREDIT", "MT700", "MT 700"]
+
+
+def is_letter_of_credit(head: str) -> bool:
+    """An LC states it at the very top; other documents may mention 'L/C' further down."""
+    return any(t in head[:250].upper() for t in LC_TITLES)
+
+
 def classify(text: str) -> str | None:
     """Pick the document type from title keywords near the top of the document."""
+    if is_letter_of_credit(text):
+        return "letter_of_credit"
     head = text[:600].upper()
     for doc_type, words in TITLE_KEYWORDS:
         if any(w in head for w in words):
@@ -186,4 +196,4 @@ def warm_up() -> None:
     _converter(False)
 
 
-assert set(t for t, _ in TITLE_KEYWORDS) == set(DOC_TYPES)
+assert set(t for t, _ in TITLE_KEYWORDS) | {"letter_of_credit"} == set(DOC_TYPES)

@@ -14,6 +14,7 @@ DOC_TYPES = {
     "shipping_bill": "Shipping Bill",
     "health_certificate": "Quality / Health Certificate",
     "certificate_of_origin": "Certificate of Origin",
+    "letter_of_credit": "Letter of Credit",
 }
 
 # Who usually prepares each document: issues are routed to them.
@@ -24,6 +25,7 @@ OWNERS = {
     "shipping_bill": "Customs broker (CHA)",
     "health_certificate": "Quality / EIC liaison",
     "certificate_of_origin": "Export documentation",
+    "letter_of_credit": "Buyer / bank (LC amendment)",
 }
 
 # Hierarchy rank: lower = closer to the source of truth (the buyer's contract).
@@ -34,6 +36,7 @@ HIERARCHY = {
     "shipping_bill": 3,
     "health_certificate": 3,
     "certificate_of_origin": 3,
+    "letter_of_credit": -1,   # checked separately: documents must comply with the LC, not outvote it
 }
 
 # Field key -> (label shown in the UI, instruction given to the model)
@@ -66,9 +69,20 @@ FIELDS = {
     "container_no": ("Container no.", "container number"),
     "lut_arn": ("LUT ARN", "LUT ARN reference number if printed, else null"),
     "igst_status": ("IGST status", "IGST payment status text, e.g. 'LUT - NOT PAID'"),
+    "expiry_date": ("LC expiry date", "date and place of expiry of the credit (field 31D)"),
+    "latest_shipment_date": ("Latest shipment date", "latest date of shipment (field 44C)"),
+    "applicant_name": ("Applicant", "applicant / buyer company name only (field 50)"),
+    "beneficiary_name": ("Beneficiary", "beneficiary / exporter company name only (field 59)"),
+    "amount_tolerance": ("Amount tolerance", "percentage credit amount tolerance (field 39A), e.g. '05/05'"),
+    "presentation_days": ("Presentation period", "period for presentation of documents (field 48), e.g. '21 DAYS'"),
+    "documents_required": ("Documents required", "list of documents required (field 46A), as printed, separated by ';'"),
 }
 
 DOC_FIELDS = {
+    "letter_of_credit": ["doc_number", "doc_date", "expiry_date", "latest_shipment_date", "applicant_name",
+                         "beneficiary_name", "total_amount", "currency", "amount_tolerance", "description",
+                         "net_weight", "net_weight_unit", "incoterms", "port_of_loading", "port_of_discharge",
+                         "presentation_days", "documents_required"],
     "purchase_order": ["doc_number", "doc_date", "exporter_name", "consignee_name", "description", "cartons",
                        "net_weight", "net_weight_unit", "unit_price", "total_amount", "currency", "incoterms",
                        "port_of_loading", "port_of_discharge"],

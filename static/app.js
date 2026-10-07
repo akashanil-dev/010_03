@@ -6,7 +6,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const DOC_SHORT = {
   purchase_order: "PO", commercial_invoice: "Invoice", packing_list: "Packing list",
-  shipping_bill: "Shipping bill", health_certificate: "Quality / health cert.", certificate_of_origin: "Cert. of origin",
+  shipping_bill: "Shipping bill", health_certificate: "Quality / health cert.", certificate_of_origin: "Cert. of origin", letter_of_credit: "Letter of credit",
 };
 const STATUS_LABEL = { error: "ERROR", warning: "WARNING", pass: "PASS", skipped: "SKIPPED", info: "" };
 
@@ -290,7 +290,8 @@ async function submitReview(checkId, decision) {
 }
 
 function renderChecklist() {
-  const groups = { "cross-document": "Across documents", arithmetic: "Within a document", compliance: "Compliance" };
+  const groups = { "cross-document": "Across documents", arithmetic: "Within a document", compliance: "Compliance",
+    "letter of credit": "Letter of credit (UCP 600)", "lab results": "Lab results" };
   $("#tab-checklist").innerHTML = Object.entries(groups).map(([cat, title]) => {
     const rows = current.report.checks.filter((c) => c.category === cat);
     return `<div class="check-group"><h3>${title}</h3>${rows.map((c) => `

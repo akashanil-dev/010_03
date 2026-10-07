@@ -64,3 +64,45 @@ def test_certificate_titles_are_recognised():
         assert classify(f"## {title}\n\nIssued by ...") == "health_certificate", title
     assert classify("## CERTIFICATE OF ORIGIN (NON-PREFERENTIAL)") == "certificate_of_origin"
     assert classify("## PACKING LIST") == "packing_list"
+
+
+def _cert(text):
+    from app.schemas import ParsedDocument
+    return ParsedDocument(filename="qc.pdf", doc_type="health_certificate", text=text, ocr_used=False, fields={})
+
+
+def test_lab_results_screening():
+    from app import labtests
+    bad = labtests.check([_cert("Parameter: Nitrofurans (AOZ, AMOZ, AHD, SEM); Result: Detected: AOZ 1.6 ug/kg; Limit: Not detected")],
+                         "seafood", "eu")
+    assert [c.status for c in bad] == ["error"]
+    good = labtests.check([_cert("Parameter: Chloramphenicol; Result: Not detected; Limit: Not detected\nNitrofurans: ND")],
+                          "seafood", "eu")
+    assert all(c.status == "pass" for c in good) and len(good) == 2
+    eto = labtests.check([_cert("Ethylene oxide: 0.35 mg/kg")], "spices", "eu")
+    assert eto[0].status == "error"
+    assert labtests.check([_cert("Ethylene oxide: 0.05 mg/kg")], "spices", "eu")[0].status == "pass"
+
+
+def _lc(**over):
+    from app.schemas import ExtractedField, ParsedDocument
+    raw = {"doc_number": "HVB-LC-26-07731", "expiry_date": "15-Oct-2099", "latest_shipment_date": "20-Sep-2026",
+           "total_amount": "102,000.00", "currency": "USD", "amount_tolerance": "05/05",
+           "description": "FROZEN RAW HEADLESS SHELL-ON VANNAMEI SHRIMP (LITOPENAEUS VANNAMEI), SIZE 26/30, IQF",
+           "incoterms": "CFR ROTTERDAM", "port_of_loading": "COCHIN, INDIA", "port_of_discharge": "ROTTERDAM, NETHERLANDS",
+           "presentation_days": "21 DAYS", "documents_required": "COMMERCIAL INVOICE; PACKING LIST; BILLS OF LADING"} | over
+    fields = {k: ExtractedField(key=k, raw=v, evidence=v, verified=True) for k, v in raw.items()}
+    return ParsedDocument(filename="lc.pdf", doc_type="letter_of_credit", text="", ocr_used=False, fields=fields)
+
+
+def test_letter_of_credit_checks():
+    from app import lc
+    flags = {c.id: c.status for c in lc.check(clean_docs() + [_lc()])}
+    assert flags["lc:shipment_date"] == "error"            # SB 23 Sep after latest shipment 20 Sep
+    assert flags["lc:description"] == "error"              # 31/40 on invoice vs 26/30 in LC
+    assert flags["lc:amount"] == "pass"                    # 102,000 within 102,000 + 5%
+    assert flags["lc:port_of_discharge"] == "pass"
+    assert flags["lc:documents_unchecked"] == "warning"    # bill of lading is required but not read
+    ok = {c.id: c.status for c in lc.check(clean_docs() + [_lc(latest_shipment_date="30-Sep-2026",
+          description="FROZEN RAW HEADLESS SHELL-ON VANNAMEI SHRIMP (LITOPENAEUS VANNAMEI), SIZE 31/40, IQF")])}
+    assert ok["lc:shipment_date"] == "pass" and ok["lc:description"] == "pass"

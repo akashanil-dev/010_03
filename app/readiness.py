@@ -67,7 +67,7 @@ def _financial_year(d):
 
 
 def build(docs: list[ParsedDocument]) -> dict:
-    docs = [d for d in docs if d.doc_type]
+    docs = [d for d in docs if d.doc_type and d.doc_type != "letter_of_credit"]
     present = {d.doc_type for d in docs}
     inv, sb = _by_type(docs, "commercial_invoice"), _by_type(docs, "shipping_bill")
     product, product_basis = detect_product(docs)
@@ -150,6 +150,10 @@ def build(docs: list[ParsedDocument]) -> dict:
             "The EU Deforestation Regulation covers natural rubber. It applies from 30 Dec 2026 for medium and large "
             "operators and 30 Jun 2027 for micro and small ones. The EU buyer will need plot geolocation and proof of "
             "no deforestation after 31 Dec 2020.")
+
+    from .labtests import readiness_items
+    for group, item, status, detail in readiness_items(docs, product, dest):
+        add(group, item, status, detail)
 
     # Export incentives: RoDTEP / drawback must be claimed on the shipping bill itself.
     if sb:

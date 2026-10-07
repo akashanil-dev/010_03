@@ -25,7 +25,7 @@ def build(docs: list[ParsedDocument]) -> dict:
     else:
         verdict = "ready"
 
-    known = sorted([d for d in docs if d.doc_type], key=lambda d: HIERARCHY[d.doc_type])
+    known = sorted([d for d in docs if d.doc_type and d.doc_type != "letter_of_credit"], key=lambda d: HIERARCHY[d.doc_type])
     return {
         "verdict": verdict,
         "counts": {"errors": len(errors), "warnings": len(warnings), "passed": len(passed),

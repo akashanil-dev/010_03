@@ -5,7 +5,8 @@ Produces three sets under data/demo/:
   errors/   the same six documents with 8 planted issues
   bundle/   the scanned set merged into one PDF
   mixed/    errors set with an Excel invoice and a phone-photo packing list
-  quality/  errors set with a lab quality certificate instead of the health certificate
+  quality/  errors set with a lab quality certificate (reporting a nitrofuran) instead of the health certificate
+  lc/       clean set plus a letter of credit it breaks (late shipment, different size)
   scanned/  the errors set, with the packing list as an image-only "scan"
 
 All companies, people and ID numbers are fictitious.
@@ -160,7 +161,7 @@ def doc_health_cert(d):
 <p>Place: Kochi | Date: {d['hc_date']} | Official Inspector (seal)</p>"""
 
 
-def doc_quality_cert(d):
+def doc_quality_cert(d, nitrofuran="Detected: AOZ 1.6 ug/kg"):
     return f"""<h1>CERTIFICATE OF QUALITY AND INSPECTION</h1>
 <p class="sub">Coastal Seafood Testing Laboratory, Kochi (fictitious; NABL-accredited format, simplified)</p>
 {kv([("Certificate No.", "CSTL/QC/2026/5521"), ("Date of issue", d['hc_date']), ("Exporter", f"{d['exporter']}, Aroor, Alappuzha, Kerala"),
@@ -170,9 +171,28 @@ def doc_quality_cert(d):
 <table><tr><th>Parameter</th><th>Result</th><th>Limit</th></tr>
 <tr><td>Glaze</td><td>Nil (net weight declared without glaze)</td><td>-</td></tr>
 <tr><td>Core temperature at stuffing</td><td>-19 C</td><td>-18 C or below</td></tr>
-<tr><td>Antibiotic residues (chloramphenicol, nitrofurans)</td><td>Not detected</td><td>Not detected</td></tr></table>
+<tr><td>Chloramphenicol</td><td>Not detected</td><td>Not detected</td></tr>
+<tr><td>Nitrofurans (AOZ, AMOZ, AHD, SEM)</td><td>{nitrofuran}</td><td>Not detected</td></tr></table>
 <p>We certify that the goods were inspected and conform to the buyer's specification.</p>
 <p>Quality Manager (seal)</p>"""
+
+
+def doc_lc(d, latest_shipment="20-Sep-2026", size="26/30"):
+    """An MT700-style documentary credit. The defaults plant two LC-only discrepancies against the clean set."""
+    return f"""<h1>MT700 ISSUE OF A DOCUMENTARY CREDIT</h1>
+<p class="sub">Issuing bank: Havenbank N.V., Rotterdam (fictitious) | Advising bank: Kerala Coastal Bank, Kochi (fictitious)</p>
+{kv([(":40A: Form of documentary credit", "IRREVOCABLE"), (":20: Documentary credit number", "HVB-LC-26-07731"),
+     (":31C: Date of issue", "25-Aug-2026"), (":40E: Applicable rules", "UCP LATEST VERSION"),
+     (":31D: Date and place of expiry", "15-Oct-2026 NETHERLANDS"),
+     (":50: Applicant", f"{d['buyer']}, {d['buyer_addr']}"), (":59: Beneficiary", f"{d['exporter']}, Aroor, Alappuzha, Kerala, India"),
+     (":32B: Currency code, amount", "USD 102,000.00"), (":39A: Percentage credit amount tolerance", "05/05"),
+     (":41D: Available with / by", "ANY BANK IN INDIA BY NEGOTIATION"), (":43P: Partial shipments", "NOT ALLOWED"),
+     (":44E: Port of loading", "COCHIN, INDIA"), (":44F: Port of discharge", "ROTTERDAM, NETHERLANDS"),
+     (":44C: Latest date of shipment", latest_shipment),
+     (":45A: Description of goods", f"12,000 KG FROZEN RAW HEADLESS SHELL-ON VANNAMEI SHRIMP (LITOPENAEUS VANNAMEI), SIZE {size}, IQF, CFR ROTTERDAM INCOTERMS 2020"),
+     (":46A: Documents required", "SIGNED COMMERCIAL INVOICE IN 3 ORIGINALS; PACKING LIST; FULL SET OF CLEAN ON BOARD BILLS OF LADING; HEALTH CERTIFICATE ISSUED BY EXPORT INSPECTION AGENCY; CERTIFICATE OF ORIGIN"),
+     (":48: Period for presentation", "21 DAYS AFTER THE DATE OF SHIPMENT BUT WITHIN THE VALIDITY OF THE CREDIT"),
+     (":49: Confirmation instructions", "WITHOUT")])}"""
 
 
 def doc_origin(d):
@@ -313,7 +333,17 @@ def main() -> None:
     merged.save(bundle / "shipment_KME-0093_all_documents.pdf")
     make_mixed(errors)
     make_quality(errors)
+    make_lc()
     print(f"Wrote demo sets to {OUT}")
+
+
+def make_lc() -> None:
+    """lc/: the clean set plus a letter of credit it does not comply with (late shipment, wrong size)."""
+    folder = OUT / "lc"
+    folder.mkdir(parents=True, exist_ok=True)
+    for fname in DOCS:
+        (folder / fname).write_bytes((OUT / "clean" / fname).read_bytes())
+    render_pdf(doc_lc(CLEAN), folder / "00_letter_of_credit.pdf")
 
 
 def make_quality(errors: dict) -> None:

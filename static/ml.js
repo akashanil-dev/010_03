@@ -39,6 +39,12 @@ function mlMessage(c) {
     const [a, b] = c.values || [];
     return a && b ? `${b.doc_name}-ന്റെ തീയതി (${b.raw}) ${a.doc_name}-ന്റെ തീയതിക്ക് (${a.raw}) മുമ്പാണ്. തീയതി പരിശോധിക്കുക.` : null;
   }
+  if (c.id === "lc:shipment_date") return `LC പ്രകാരമുള്ള അവസാന ഷിപ്പ്മെന്റ് തീയതിക്ക് ശേഷമാണ് ഷിപ്പ്മെന്റ്. ${c.message} LC ഭേദഗതി (amendment) ആവശ്യപ്പെടുക.`;
+  if (c.id === "lc:description") return `Invoice-ലെ ചരക്കിന്റെ വിവരണം LC-യുമായി ഒത്തുപോകുന്നില്ല. ${c.message}`;
+  if (c.id === "lc:amount") return `Invoice തുക LC തുകയേക്കാൾ കൂടുതലാണ്. ${c.message}`;
+  if (c.id.startsWith("lc:port") || c.id === "lc:incoterms") return `രേഖകൾ LC നിബന്ധനകളുമായി ഒത്തുപോകുന്നില്ല. ${c.message}`;
+  if (c.id.startsWith("lab:antibiotic")) return "സർട്ടിഫിക്കറ്റിൽ നിരോധിത ആന്റിബയോട്ടിക് കണ്ടെത്തിയിട്ടുണ്ട്. ഈ ലോട്ട് കയറ്റി അയക്കരുത്; ഫാം കണ്ടെത്തി വീണ്ടും പരിശോധിക്കുക.";
+  if (c.id.startsWith("lab:eto")) return "Ethylene oxide അളവ് EU പരിധിയായ 0.1 mg/kg-ൽ കൂടുതലാണ്. ഈ ലോട്ട് EU-ലേക്ക് അയക്കരുത്.";
   if (c.id === "comp:required_docs") return `ആവശ്യമായ രേഖകൾ ഇല്ല. ${c.message}`;
   if (c.id === "comp:recommended_docs") return `ചില അനുബന്ധ രേഖകൾ അപ്‌ലോഡ് ചെയ്തിട്ടില്ല. ${c.message}`;
   return null;

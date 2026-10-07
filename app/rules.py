@@ -346,8 +346,14 @@ def compliance(docs: list[ParsedDocument]) -> list[Check]:
 
 
 def run_all(docs: list[ParsedDocument]) -> list[dict]:
+    from . import labtests, lc, readiness
+
     docs = [d for d in docs if d.doc_type]
-    checks = cross_document(docs) + arithmetic(docs) + compliance(docs)
+    shipment = [d for d in docs if d.doc_type != "letter_of_credit"]   # the LC is checked against, not compared with
+    product, _ = readiness.detect_product(shipment)
+    destination, _ = readiness.detect_destination(shipment)
+    checks = (cross_document(shipment) + arithmetic(shipment) + compliance(shipment) + lc.check(docs)
+              + labtests.check(shipment, product, destination))
     order = {"error": 0, "warning": 1, "pass": 2, "skipped": 3}
     checks.sort(key=lambda c: order[c.status])
     return [asdict(c) for c in checks]
