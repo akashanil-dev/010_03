@@ -14,7 +14,8 @@ from pydantic import BaseModel
 
 from . import report
 from .parsing import warm_up
-from .pipeline import process_file
+from .pipeline import file_hash, process_file
+from .splitting import split_bundle
 
 ROOT = Path(__file__).resolve().parent.parent
 UPLOADS = ROOT / "data" / "uploads"
@@ -31,15 +32,38 @@ def _startup():
     threading.Thread(target=warm_up, daemon=True).start()
 
 
+def _expand_bundles(s: dict):
+    """Replace any merged PDF holding several documents with one entry per document."""
+    expanded = []
+    for item in s["files"]:
+        item["state"] = "splitting"
+        try:
+            with LOCK:
+                parts = split_bundle(Path(item["path"]), Path(item["path"]).parent)
+        except Exception:
+            parts = None
+        if not parts:
+            item["state"] = "queued"
+            expanded.append(item)
+            continue
+        source_hash = file_hash(Path(item["path"]))
+        for p in parts:
+            expanded.append({"filename": p["filename"], "path": p["path"], "state": "queued",
+                             "bundle": item["filename"], "pages": p["pages"],
+                             "cache_key": f"{source_hash}_p{'-'.join(map(str, p['pages']))}"})
+    s["files"] = expanded
+
+
 def _process(sid: str):
     s = SHIPMENTS[sid]
+    _expand_bundles(s)
     docs = []
     for item in s["files"]:
         item["state"] = "reading"
         item["started"] = time.time()
         try:
             with LOCK:
-                doc = process_file(Path(item["path"]), item["filename"])
+                doc = process_file(Path(item["path"]), item["filename"], item.get("cache_key"))
             docs.append(doc)
             item.update(state="done", doc_type=doc.doc_type, ocr_used=doc.ocr_used,
                         seconds=round(time.time() - item["started"], 1))
@@ -83,7 +107,7 @@ async def create_shipment(files: list[UploadFile] = File(...)):
 @app.post("/api/demo/{name}")
 def demo(name: str):
     folder = DEMO / name
-    if name not in ("clean", "errors", "scanned") or not folder.exists():
+    if name not in ("clean", "errors", "scanned", "bundle") or not folder.exists():
         raise HTTPException(404, "Unknown demo set")
     return {"id": _start([(p.name, p) for p in sorted(folder.glob("*.pdf"))])}
 
@@ -101,7 +125,7 @@ def get_shipment(sid: str):
     now = time.time()
     files = []
     for f in s["files"]:
-        item = {k: v for k, v in f.items() if k not in ("path", "started")}
+        item = {k: v for k, v in f.items() if k not in ("path", "started", "cache_key")}
         if f["state"] == "reading":
             item["elapsed"] = round(now - f["started"], 1)
         files.append(item)

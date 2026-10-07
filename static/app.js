@@ -87,10 +87,13 @@ function track(id, tab) {
 function renderProgress() {
   $("#progress-list").innerHTML = current.files.map((f) => {
     let meta = "Waiting";
+    if (f.state === "splitting") meta = "Checking whether this file holds several documents…";
     if (f.state === "reading") meta = `Reading… ${Math.round(f.elapsed || 0)} s`;
     if (f.state === "done") meta = `${esc(DOC_SHORT[f.doc_type] || "Unrecognised")}${f.ocr_used ? " · scanned, OCR used" : ""} · ${f.seconds < 1 ? "from cache" : f.seconds + " s"}`;
     if (f.state === "error") meta = `Could not read: ${esc(f.error)}`;
-    return `<li><span class="state-icon ${f.state}"></span><span class="mono">${esc(f.filename)}</span><span class="meta">${meta}</span></li>`;
+    const from = f.bundle ? `<br><span class="muted" style="font-size:12px">from ${esc(f.bundle)}, page ${f.pages.join("–")}</span>` : "";
+    const icon = f.state === "splitting" ? "reading" : f.state;
+    return `<li><span class="state-icon ${icon}"></span><span class="mono">${esc(f.filename)}${from}</span><span class="meta">${meta}</span></li>`;
   }).join("");
 }
 

@@ -3,6 +3,7 @@
 Produces three sets under data/demo/:
   clean/    six consistent documents
   errors/   the same six documents with 8 planted issues
+  bundle/   the scanned set merged into one PDF
   scanned/  the errors set, with the packing list as an image-only "scan"
 
 All companies, people and ID numbers are fictitious.
@@ -230,6 +231,15 @@ def main() -> None:
             make_scan(src, scanned / fname)
         else:
             (scanned / fname).write_bytes(src.read_bytes())
+
+    # bundle/: the whole scanned set merged into a single PDF, as a broker might receive it.
+    bundle = OUT / "bundle"
+    bundle.mkdir(parents=True, exist_ok=True)
+    merged = pymupdf.open()
+    for fname in DOCS:
+        with pymupdf.open(scanned / fname) as part:
+            merged.insert_pdf(part)
+    merged.save(bundle / "shipment_KME-0093_all_documents.pdf")
     print(f"Wrote demo sets to {OUT}")
 
 
