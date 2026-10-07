@@ -1,7 +1,7 @@
 """Assemble the shipment report: verdict, checks and the Shipment Truth Matrix."""
 
-from . import rules
-from .schemas import DOC_TYPES, FIELDS, HIERARCHY, ParsedDocument
+from . import readiness, rules
+from .schemas import DOC_TYPES, FIELDS, HIERARCHY, OWNERS, ParsedDocument
 
 MATRIX_FIELDS = ["cartons", "net_weight", "gross_weight", "hs_code", "exporter_name", "consignee_name",
                  "port_of_loading", "port_of_discharge", "incoterms", "fob_value", "invoice_ref", "po_ref",
@@ -10,6 +10,9 @@ MATRIX_FIELDS = ["cartons", "net_weight", "gross_weight", "hs_code", "exporter_n
 
 def build(docs: list[ParsedDocument]) -> dict:
     checks = rules.run_all(docs)
+    for c in checks:
+        blamed = sorted({v["doc_type"] for v in c.get("values", []) if v.get("outlier")})
+        c["owners"] = [OWNERS[t] for t in blamed] or (["Export documentation"] if c["status"] in ("error", "warning") else [])
     errors = [c for c in checks if c["status"] == "error"]
     warnings = [c for c in checks if c["status"] == "warning"]
     passed = [c for c in checks if c["status"] == "pass"]
@@ -37,6 +40,7 @@ def build(docs: list[ParsedDocument]) -> dict:
                        for k, f in d.fields.items()},
         } for d in docs],
         "matrix": matrix(known, checks),
+        "readiness": readiness.build(docs),
     }
 
 

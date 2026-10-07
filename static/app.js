@@ -13,6 +13,7 @@ const STATUS_LABEL = { error: "ERROR", warning: "WARNING", pass: "PASS", skipped
 const NUMERIC_ROWS = new Set(["cartons", "net_weight", "gross_weight", "fob_value", "hs_code"]);
 
 const ACCEPTED = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "xlsx", "xls", "ods", "docx", "doc", "odt", "csv"];
+let lang = "en";
 let selected = [];
 let current = null;   // latest shipment payload
 let pollTimer = null;
@@ -129,6 +130,8 @@ function renderResults() {
   renderVerdict();
   renderMatrix();
   renderIssues();
+  renderFixes();
+  renderReadiness();
   renderChecklist();
   renderDocuments();
   renderAudit();
@@ -260,8 +263,9 @@ function renderIssues() {
          </div>`;
     return `<article class="issue ${c.status} ${r ? "reviewed" : ""}" id="issue-${esc(c.id)}">
       <div class="issue-head"><h3><span class="sev ${c.status}">${STATUS_LABEL[c.status]}</span>${esc(c.title)}</h3><span class="cat">${esc(c.category)}</span></div>
-      <p class="msg">${esc(c.message)}</p>
+      ${lang === "ml" && mlMessage(c) ? `<p class="msg ml">${esc(mlMessage(c))}</p><p class="en-sub">${esc(c.message)}</p>` : `<p class="msg">${esc(c.message)}</p>`}
       ${c.suggestion ? `<p class="fix"><b>Suggested fix:</b> ${esc(c.suggestion)}</p>` : ""}
+      ${c.owners?.length ? `<p class="cat">Goes to: ${esc(c.owners.join(", "))}</p>` : ""}
       ${valuesTable(c.values)}
       ${review}
     </article>`;
@@ -371,6 +375,70 @@ function printReport() {
   w.document.close();
 }
 
+/* ---------- send fixes ---------- */
+function openFlags() {
+  const reviews = current.reviews || {};
+  return flags().filter((c) => reviews[c.id]?.decision !== "overridden");
+}
+
+function fixText(owner, items) {
+  const label = current.label || current.id;
+  const lines = items.map((c, i) => {
+    const text = lang === "ml" && mlMessage(c) ? mlMessage(c) : `${c.message}${c.suggestion ? " " + c.suggestion : ""}`;
+    return `${i + 1}. ${c.status === "error" ? "[ERROR]" : "[WARNING]"} ${c.title}: ${text}`;
+  });
+  const head = lang === "ml" ? `${ML_UI.fixesFor} (${owner})\n${ML_UI.shipment}: ${label}` : `Document fixes needed (${owner})\nShipment: ${label}`;
+  const foot = lang === "ml" ? ML_UI.footer : "Found by Tally before filing. Please correct and send the updated document.";
+  return `${head}\n\n${lines.join("\n")}\n\n${foot}`;
+}
+
+function renderFixes() {
+  const groups = {};
+  for (const c of openFlags()) for (const o of c.owners || ["Export documentation"]) (groups[o] ||= []).push(c);
+  const owners = Object.keys(groups);
+  if (!owners.length) {
+    $("#tab-fixes").innerHTML = `<div class="empty-state"><b>Nothing to send.</b><br>There are no open issues for this shipment.</div>`;
+    return;
+  }
+  $("#tab-fixes").innerHTML = `<p class="muted">Each issue goes to the team that prepares the document at fault. Share the list on WhatsApp or by email; overridden flags are left out.</p>
+    <div class="fix-grid">${owners.map((o, n) => {
+      const items = groups[o];
+      return `<div class="fix-card"><h3>${esc(o)}</h3><span class="cat">${items.length} ${items.length === 1 ? "item" : "items"} to fix</span>
+        <ol>${items.map((c) => `<li class="${lang === "ml" ? "ml" : ""}"><b>${esc(c.title)}.</b> ${esc(lang === "ml" && mlMessage(c) ? mlMessage(c) : c.message)}</li>`).join("")}</ol>
+        <div class="actions">
+          <a class="btn small wa" target="_blank" rel="noopener" data-wa="${n}">Share on WhatsApp</a>
+          <a class="btn small" data-mail="${n}">Email</a>
+          <button class="btn small ghost" data-copy="${n}">Copy text</button>
+        </div></div>`;
+    }).join("")}</div>`;
+  owners.forEach((o, n) => {
+    const text = fixText(o, groups[o]);
+    $(`[data-wa="${n}"]`).href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    $(`[data-mail="${n}"]`).href = `mailto:?subject=${encodeURIComponent("Document fixes: " + (current.label || current.id))}&body=${encodeURIComponent(text)}`;
+    $(`[data-copy="${n}"]`).onclick = async (e) => {
+      try { await navigator.clipboard.writeText(text); e.target.textContent = "Copied"; } catch { prompt("Copy this text:", text); }
+    };
+  });
+}
+
+/* ---------- readiness ---------- */
+function renderReadiness() {
+  const r = current.report.readiness;
+  if (!r) { $("#tab-readiness").innerHTML = ""; return; }
+  const groups = [...new Set(r.items.map((i) => i.group))];
+  const label = { ok: "OK", missing: "MISSING", check: "CHECK" };
+  $("#tab-readiness").innerHTML = `
+    <div class="ready-head">
+      <div><span class="muted">Product</span><br><b>${esc(r.product_name)}</b> <span class="muted">· from ${esc(r.product_basis)}</span></div>
+      <div><span class="muted">Destination</span><br><b>${esc(r.destination_name)}</b> <span class="muted">· from ${esc(r.destination_basis)}</span></div>
+      <div><span class="muted">Status</span><br><b>${r.counts.ok} ok · ${r.counts.missing} missing · ${r.counts.check} to check</b></div>
+    </div>
+    ${groups.map((g) => `<div class="check-group"><h3>${esc(g)}</h3>${r.items.filter((i) => i.group === g).map((i) => `
+      <div class="check-row"><span><span class="rtag ${i.status}">${label[i.status]}</span></span>
+        <div><div class="t">${esc(i.item)}</div><div class="m">${esc(i.detail)}</div></div></div>`).join("")}</div>`).join("")}
+    <p class="muted" style="font-size:13px">Requirements depend on the buyer and the importing country. Items marked CHECK need a person to confirm; Tally does not assert rules it cannot verify.</p>`;
+}
+
 /* ---------- dashboard ---------- */
 const VERDICT_TEXT = { blocked: "BLOCKED", review: "REVIEW", ready: "READY" };
 
@@ -431,6 +499,11 @@ function init() {
   $("#btn-clear").onclick = () => { selected = []; renderFileList(); };
   $$("[data-demo]").forEach((b) => b.onclick = () => startDemo(b.dataset.demo));
   $$(".tab").forEach((t) => t.onclick = () => switchTab(t.dataset.tab));
+  $$(".lang").forEach((b) => b.onclick = () => {
+    lang = b.dataset.lang;
+    $$(".lang").forEach((x) => x.classList.toggle("active", x === b));
+    if (current?.report) { renderIssues(); renderFixes(); }
+  });
   $("#drawer-close").onclick = closeDrawer;
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") closeDrawer(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });

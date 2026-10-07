@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import report, store
+from .normalize import reference
 from .parsing import SUPPORTED, warm_up
 from .pipeline import file_hash, process_file
 from .splitting import split_bundle
@@ -89,6 +90,7 @@ def _label(docs) -> str:
                 return f.raw.split(",")[0]
         return None
     inv = first("doc_number", "commercial_invoice") if any(d.doc_type == "commercial_invoice" for d in docs) else None
+    inv = reference(inv) if inv else None
     return " · ".join(x for x in (inv, first("consignee_name", "commercial_invoice")) if x)
 
 

@@ -6,18 +6,10 @@ import threading
 from collections import Counter
 from pathlib import Path
 
+from .schemas import OWNERS
+
 DB = Path(__file__).resolve().parent.parent / "data" / "tally.db"
 _lock = threading.Lock()
-
-# Who usually prepares each document. Used for the dashboard and for routing fixes.
-OWNERS = {
-    "purchase_order": "Buyer / sales team",
-    "commercial_invoice": "Accounts / sales",
-    "packing_list": "Warehouse",
-    "shipping_bill": "Customs broker (CHA)",
-    "health_certificate": "Quality / EIC liaison",
-    "certificate_of_origin": "Export documentation",
-}
 
 
 def _conn():

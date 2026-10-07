@@ -45,11 +45,42 @@ FORMAT_LABEL = {".xlsx": "Excel", ".xls": "Excel", ".ods": "Spreadsheet", ".docx
                 ".odt": "Document", ".csv": "CSV"}
 
 
+def skew_angle(img) -> float:
+    """Estimate how far a photographed page is rotated (degrees).
+
+    Rotates a small greyscale copy through candidate angles and keeps the one
+    where text lines are most horizontal, i.e. the row-darkness profile is sharpest.
+    """
+    import numpy as np
+    from PIL import Image
+
+    small = img.convert("L")
+    small.thumbnail((900, 900))
+    best, best_score = 0.0, -1.0
+    for angle in np.arange(-6.0, 6.01, 0.25):
+        rotated = np.asarray(small.rotate(float(angle), resample=Image.BILINEAR, fillcolor=255), dtype=float)
+        profile = (255 - rotated).sum(axis=1)
+        score = float(np.var(np.diff(profile)))
+        if score > best_score:
+            best, best_score = float(angle), score
+    return best
+
+
 def image_to_pdf(path: Path) -> Path:
-    """Wrap a photo or scanned image in a one-page PDF, so it goes through the scan (OCR) path."""
+    """Straighten a photo or scanned image and wrap it in a one-page PDF for the OCR path."""
+    import io
+
+    from PIL import Image, ImageOps
+
     out = path.with_name(path.name + ".pdf")
-    with pymupdf.open(path) as img:
-        pdf_bytes = img.convert_to_pdf()
+    img = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
+    angle = skew_angle(img)
+    if abs(angle) >= 0.5:
+        img = img.rotate(angle, resample=Image.BICUBIC, expand=True, fillcolor=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    with pymupdf.open(stream=buf.getvalue(), filetype="png") as pic:
+        pdf_bytes = pic.convert_to_pdf()
     with pymupdf.open("pdf", pdf_bytes) as pdf:
         pdf.save(out)
     return out

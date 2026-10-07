@@ -34,6 +34,7 @@ def process_file(path: Path, filename: str | None = None, cache_key: str | None 
     if cached.exists():
         doc = ParsedDocument.model_validate_json(cached.read_text())
         doc.filename = filename or path.name
+        doc.source_format = doc.source_format or source_format(path, doc.ocr_used)
         return doc
 
     t0 = time.time()

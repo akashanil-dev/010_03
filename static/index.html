@@ -77,15 +77,21 @@
   <!-- Results -->
   <section id="view-results" class="view" hidden>
     <div id="verdict" class="verdict"></div>
+    <div class="langbar"><span class="muted">Issue language</span>
+      <button class="lang active" data-lang="en">English</button><button class="lang" data-lang="ml">മലയാളം</button></div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="matrix">Truth matrix</button>
       <button class="tab" data-tab="issues">Issues <span id="issues-count" class="pill"></span></button>
-      <button class="tab" data-tab="checklist">Checklist</button>
+      <button class="tab" data-tab="fixes">Send fixes</button>
+      <button class="tab" data-tab="readiness">Readiness</button>
+      <button class="tab" data-tab="checklist">All checks</button>
       <button class="tab" data-tab="documents">Documents</button>
       <button class="tab" data-tab="audit">Audit log <span id="audit-count" class="pill"></span></button>
     </nav>
     <div id="tab-matrix" class="tab-panel"></div>
     <div id="tab-issues" class="tab-panel" hidden></div>
+    <div id="tab-fixes" class="tab-panel" hidden></div>
+    <div id="tab-readiness" class="tab-panel" hidden></div>
     <div id="tab-checklist" class="tab-panel" hidden></div>
     <div id="tab-documents" class="tab-panel" hidden></div>
     <div id="tab-audit" class="tab-panel" hidden></div>
@@ -100,6 +106,7 @@
 </aside>
 
 <footer class="foot">Tally is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
+<script src="ml.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

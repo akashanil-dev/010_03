@@ -52,4 +52,6 @@ def test_normalisers():
     assert N.container("KYLU 482913-0 / EIA 0048213") == N.container("KYLU4829130")
     assert N.reference("KME/EXP/26-27/0093 dt 18-Sep-2026") == "KME/EXP/26-27/0093"
     assert N.reference("Invoice No.: KME/EXP/26-27/0093") == "KME/EXP/26-27/0093"   # label leaked by the model
+    assert N.iec("IEC AAKCK7731M") == N.iec("AAKCK7731M") == "AAKCK7731M"
+    assert N.gstin("GSTIN 32AAKCK7731M1Z9") == "32AAKCK7731M1Z9"
     assert str(N.parse_date("18-09-2026")) == str(N.parse_date("18-Sep-2026")) == "2026-09-18"

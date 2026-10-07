@@ -16,6 +16,16 @@ DOC_TYPES = {
     "certificate_of_origin": "Certificate of Origin",
 }
 
+# Who usually prepares each document: issues are routed to them.
+OWNERS = {
+    "purchase_order": "Buyer / sales team",
+    "commercial_invoice": "Accounts / sales",
+    "packing_list": "Warehouse",
+    "shipping_bill": "Customs broker (CHA)",
+    "health_certificate": "Quality / EIC liaison",
+    "certificate_of_origin": "Export documentation",
+}
+
 # Hierarchy rank: lower = closer to the source of truth (the buyer's contract).
 HIERARCHY = {
     "purchase_order": 0,

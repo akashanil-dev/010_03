@@ -134,5 +134,17 @@ def lut_arn(raw: str | None) -> str | None:
     return m.group() if m else None
 
 
+def iec(raw: str | None) -> str | None:
+    """'IEC AAKCK7731M' -> 'AAKCK7731M' (10 characters)."""
+    m = re.search(r"\b[A-Z0-9]{10}\b", (raw or "").upper().replace("IEC", " "))
+    return m.group() if m else None
+
+
+def gstin(raw: str | None) -> str | None:
+    """'GSTIN 32AAKCK7731M1Z9' -> '32AAKCK7731M1Z9' (15 characters, starts with the state code)."""
+    m = re.search(r"\b\d{2}[A-Z0-9]{13}\b", (raw or "").upper())
+    return m.group() if m else None
+
+
 def plain(raw: str | None) -> str | None:
     return re.sub(r"\s+", " ", raw).strip().upper() if raw else None
