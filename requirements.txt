@@ -1,0 +1,12 @@
+docling
+fastapi
+uvicorn
+python-multipart
+pydantic
+rapidfuzz
+pymupdf
+pillow
+ollama
+ibm-watsonx-ai
+python-dotenv
+pytest
