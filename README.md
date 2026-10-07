@@ -155,7 +155,9 @@ The results are organised in tabs:
    - which team it goes to ("Goes to: Warehouse");
    - each document's value with its source text, the likely wrong one highlighted.
 
-   **Reviewing an issue:** click **Confirm issue** if it is a real problem, or write a note and click **Override** if it is acceptable (a note is required to override). The decision, note and time are saved. Once every error is overridden and every warning reviewed, the verdict turns to READY. Click **Change** to revise a decision.
+   **Review team:** at the top of the Issues tab, add the people reviewing (for example "Anjali, Accounts") once; they are remembered in this browser. Each issue then has a **Reviewed by** dropdown. Untick **Record who made each decision** to review without names (logged as "Name not recorded").
+
+   **Reviewing an issue:** pick the reviewer, then click **Confirm issue** if it is a real problem, or write a note and click **Override** if it is acceptable (a note is required to override). The decision, note and time are saved. Once every error is overridden and every warning reviewed, the verdict turns to READY. Click **Change** to revise a decision.
 3. **Send fixes**: the open issues grouped by the team that prepares the faulty document (Warehouse, Accounts / sales, Customs broker, Export documentation). For each team:
    - **Share on WhatsApp** opens WhatsApp (web or app) with the fix list ready to send; choose the contact;
    - **Email** opens your mail app with the list in the body;

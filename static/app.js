@@ -191,6 +191,7 @@ function renderVerdict() {
       <button class="btn small danger" id="btn-delete">Delete uploaded files</button>
     </div>`;
   $("#btn-print").onclick = printReport;
+  $("#btn-export").onclick = printReport;
   $("#btn-new").onclick = goHome;
   $("#btn-delete").onclick = deleteShipment;
   const open = v.openErrors.length + v.openWarnings.length;
@@ -275,13 +276,13 @@ function renderIssues() {
   const fl = flags();
   if (!fl.length) { $("#tab-issues").innerHTML = `<div class="empty-state"><b>No issues found.</b><br>Every cross-document, arithmetic and compliance check passed.</div>`; return; }
   const reviews = current.reviews || {};
-  $("#tab-issues").innerHTML = `<div class="issues">${fl.map((c) => {
+  $("#tab-issues").innerHTML = `${teamPanel()}<div class="issues">${fl.map((c) => {
     const r = reviews[c.id];
     const review = r
       ? `<div class="review-box"><div class="review-done"><b class="${r.decision}">${r.decision === "confirmed" ? "Confirmed as a real problem" : "Overridden (accepted as is)"}</b> by ${esc(r.reviewer)} at ${esc(r.at.replace("T", " "))}${r.note ? ` · “${esc(r.note)}”` : ""}</div><button class="btn small ghost" data-change="${esc(c.id)}">Change</button></div>`
       : `<div class="review-box">
            <div class="review-head"><b>Your decision</b>
-             <label class="reviewer">Your name <input class="reviewer-name" maxlength="60" placeholder="e.g. Anjali, Accounts" value="${esc(reviewerName())}"></label>
+             ${reviewerPicker()}
              <span class="muted">Confirm it as a real problem, or override it if it is acceptable. Both are saved to the audit log.</span></div>
            <label class="sr-only" for="note-${esc(c.id)}">Reason for your decision</label>
            <textarea maxlength="1000" placeholder="Why? (optional to confirm, required to override)" id="note-${esc(c.id)}"></textarea>
@@ -302,19 +303,68 @@ function renderIssues() {
     </article>`;
   }).join("")}</div>`;
   $$("[data-review]").forEach((b) => b.onclick = () => submitReview(b.dataset.id, b.dataset.review));
+  wireTeamPanel();
   $$("[data-change]").forEach((b) => b.onclick = () => { delete current.reviews[b.dataset.change]; renderIssues(); });
 }
 
-function reviewerName() {
-  try { return localStorage.getItem("tallytime-reviewer") || ""; } catch { return ""; }
+/* Review team: names are entered once (remembered in this browser) and picked from a dropdown per issue. */
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable: keep in memory only */ }
+}
+let team = load("tallytime-team", []);
+let namesOn = load("tallytime-names-on", true);
+let lastReviewer = load("tallytime-last-reviewer", "");
+
+function teamPanel() {
+  const chips = team.map((n, i) => `<span class="member">${esc(n)}<button class="member-x" data-remove="${i}" aria-label="Remove ${esc(n)}">×</button></span>`).join("");
+  return `<div class="team-panel">
+    <div class="team-row">
+      <b>Review team</b>
+      <label class="switch"><input type="checkbox" id="names-on" ${namesOn ? "checked" : ""}> Record who made each decision</label>
+    </div>
+    ${namesOn ? `<div class="team-row">
+      <div class="members">${chips || '<span class="muted">No names yet. Add the people reviewing this shipment.</span>'}</div>
+      <form id="add-member" class="add-member"><input id="member-name" maxlength="60" placeholder="Name and team, e.g. Anjali, Accounts" aria-label="Reviewer name">
+        <button class="btn small" type="submit">Add</button></form>
+    </div>` : `<p class="muted small">Names are not recorded; decisions are logged as "Name not recorded".</p>`}
+  </div>`;
+}
+
+function reviewerPicker() {
+  if (!namesOn) return "";
+  if (!team.length) return `<span class="reviewer muted">Add reviewer names in the Review team panel above.</span>`;
+  const selected = team.includes(lastReviewer) ? lastReviewer : team[0];
+  return `<label class="reviewer">Reviewed by <select class="reviewer-name">${team.map((n) =>
+    `<option ${n === selected ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>`;
+}
+
+function wireTeamPanel() {
+  const toggle = $("#names-on");
+  if (toggle) toggle.onchange = () => { namesOn = toggle.checked; save("tallytime-names-on", namesOn); renderIssues(); };
+  const form = $("#add-member");
+  if (form) form.onsubmit = (e) => {
+    e.preventDefault();
+    const name = $("#member-name").value.trim().replace(/\s+/g, " ");
+    if (name && !team.includes(name)) { team.push(name); save("tallytime-team", team); }
+    renderIssues();
+    $("#member-name")?.focus();
+  };
+  $$("[data-remove]").forEach((b) => b.onclick = () => { team.splice(+b.dataset.remove, 1); save("tallytime-team", team); renderIssues(); });
 }
 
 async function submitReview(checkId, decision) {
   const note = document.getElementById(`note-${checkId}`)?.value || "";
   const box = document.getElementById(`issue-${checkId}`);
-  const reviewer = (box?.querySelector(".reviewer-name")?.value || "").trim();
-  if (!reviewer) { alert("Please enter your name, so the audit log shows who made this decision."); return; }
-  try { localStorage.setItem("tallytime-reviewer", reviewer); } catch {}
+  let reviewer = "Name not recorded";
+  if (namesOn) {
+    reviewer = (box?.querySelector(".reviewer-name")?.value || "").trim();
+    if (!reviewer) { alert("Add the reviewer's name in the Review team panel at the top of this tab first."); return; }
+    lastReviewer = reviewer;
+    save("tallytime-last-reviewer", reviewer);
+  }
   if (decision === "overridden" && !note.trim()) { alert("Please write a note explaining why this flag is accepted."); return; }
   const res = await fetch(`/api/shipments/${current.id}/reviews`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -386,6 +436,15 @@ async function deleteShipment() {
 function printReport() {
   const r = current.report, v = effectiveVerdict(), reviews = current.reviews || {};
   const stamp = { blocked: "BLOCKED", review: "NEEDS REVIEW", ready: "READY TO FILE" }[v.verdict];
+  const passed = r.checks.filter((c) => c.status === "pass");
+  const confirmed = flags().filter((c) => reviews[c.id]?.decision === "confirmed").length;
+  const conclusion = {
+    blocked: `Not ready to file. ${v.openErrors.length} ${v.openErrors.length === 1 ? "error is" : "errors are"} still open and must be fixed (or overridden with a reason) before the documents go to customs or the bank.`,
+    review: `No open errors, but ${v.openWarnings.length} ${v.openWarnings.length === 1 ? "warning needs" : "warnings need"} a decision before filing.`,
+    ready: v.overridden
+      ? `Ready to file. Every flag was reviewed; ${v.overridden} ${v.overridden === 1 ? "was" : "were"} overridden by a reviewer, with the reasons listed above.`
+      : "Ready to file. Every check passed on these documents.",
+  }[v.verdict];
   const issues = flags().map((c) => {
     const rv = reviews[c.id];
     return `<div class="i ${c.status}"><h3>${STATUS_LABEL[c.status]} · ${esc(c.title)}</h3><p>${esc(c.message)}</p>
@@ -400,14 +459,19 @@ function printReport() {
     .stamp.ready{border-color:#1F7A50;color:#1F7A50} .stamp.review{border-color:#A8540A;color:#A8540A}
     .i{border-left:4px solid #C41E33;padding:6px 10px;margin:8px 0;page-break-inside:avoid} .i.warning{border-color:#A8540A}
     table{border-collapse:collapse;margin:4px 0} td{border:1px solid #ccc;padding:2px 6px;font-family:monospace} tr.o td{background:#FBE3E6;color:#C41E33}
-    .rv{color:#555} .m{color:#555} li{margin:2px 0}</style></head><body>
+    .rv{color:#555} .m{color:#555} li{margin:2px 0} .final{font-size:14px;font-weight:700}</style></head><body>
     <h1>TallyTime · Export document review</h1>
     <p class="m">Generated ${new Date().toLocaleString()} · Shipment ${esc(current.id)}</p>
     <div class="stamp ${v.verdict}">${stamp}</div>
     <p>${r.counts.errors} errors · ${r.counts.warnings} warnings · ${r.counts.passed}/${r.counts.evaluated} checks passed · ${v.reviewed}/${v.total} flags reviewed</p>
     <h2>Documents</h2><ul>${r.documents.map((d) => `<li>${esc(d.doc_name)}: ${esc(d.filename)}${d.ocr_used ? " (scanned, OCR)" : ""}</li>`).join("")}</ul>
     <h2>Issues</h2>${issues}
-    <h2>Checks passed</h2><ul>${r.checks.filter((c) => c.status === "pass").map((c) => `<li>${esc(c.title)}: ${esc(c.message)}</li>`).join("")}</ul>
+    <h2>Checks passed (${passed.length} of ${r.counts.evaluated})</h2>
+    ${passed.length ? `<ul>${passed.map((c) => `<li>${esc(c.title)}: ${esc(c.message)}</li>`).join("")}</ul>` : "<p>None of the checks passed.</p>"}
+    <h2>Final verdict</h2>
+    <div class="stamp ${v.verdict}">${stamp}</div>
+    <p class="final">${esc(conclusion)}</p>
+    <p>${r.counts.errors} ${r.counts.errors === 1 ? "error" : "errors"} and ${r.counts.warnings} ${r.counts.warnings === 1 ? "warning" : "warnings"} found · ${confirmed} confirmed · ${v.overridden} overridden · ${v.total - v.reviewed} not yet reviewed.</p>
     <p class="m" style="margin-top:20px">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call. Values were extracted by an AI model and checked by deterministic rules; each value's source text is shown in the app.</p>
     <script>window.onload=()=>window.print()<\/script></body></html>`;
   const w = window.open("", "_blank");

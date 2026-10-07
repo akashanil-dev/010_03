@@ -445,3 +445,34 @@ h1, h2 { font-weight: 700; }
 
 .privacy-badge.cloud { color: var(--cdx-progressive); border-color: var(--cdx-progressive); background: var(--cdx-progressive-bg); }
 .privacy-badge.cloud .dot { background: var(--cdx-progressive); }
+
+/* Review team panel */
+.team-panel { background: var(--cdx-bg); border: 1px solid var(--cdx-border-subtle); border-left: 4px solid var(--cdx-progressive); border-radius: var(--cdx-radius); padding: 14px 18px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.team-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.members { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.member { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border: 1px solid var(--cdx-progressive); background: var(--cdx-progressive-bg); color: var(--cdx-progressive); border-radius: var(--cdx-radius); font-weight: 700; font-size: 13px; }
+.member-x { border: none; background: none; color: var(--cdx-progressive); font-size: 16px; line-height: 1; padding: 0 4px; }
+.add-member { display: flex; gap: 6px; }
+.add-member input { font: inherit; border: 1px solid var(--cdx-border); border-radius: var(--cdx-radius); padding: 4px 8px; width: 260px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--cdx-subtle); cursor: pointer; }
+.reviewer select { font: inherit; border: 1px solid var(--cdx-border); border-radius: var(--cdx-radius); padding: 3px 6px; background: var(--cdx-bg); min-width: 200px; }
+
+/* Export call to action under every results tab */
+.export-cta { margin-top: 24px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--cdx-progressive-bg); border: 1px solid #a6c4f5; border-left: 4px solid var(--cdx-progressive); border-radius: var(--cdx-radius); }
+.export-cta > div { display: flex; flex-direction: column; gap: 2px; max-width: 760px; }
+
+/* The page is light: keep native pop-ups (dropdown lists, date pickers) light even on a dark system theme */
+:root { color-scheme: light; }
+
+/* Dropdown in the Codex style */
+.reviewer select {
+  appearance: none; -webkit-appearance: none;
+  font: inherit; font-weight: 700; color: var(--cdx-base);
+  background: var(--cdx-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20'%3E%3Cpath fill='%23202122' d='M17.5 4.75 10 12.25 2.5 4.75 1 6.25l9 9 9-9z'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid var(--cdx-border); border-radius: var(--cdx-radius);
+  padding: 5px 34px 5px 10px; min-width: 220px; cursor: pointer;
+}
+.reviewer select:hover { border-color: var(--cdx-placeholder); }
+.reviewer select:focus { outline: none; border-color: var(--cdx-progressive); box-shadow: inset 0 0 0 1px var(--cdx-progressive); }
+.reviewer select option { background: var(--cdx-bg); color: var(--cdx-base); font-weight: 400; }
