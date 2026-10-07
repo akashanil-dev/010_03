@@ -130,7 +130,7 @@ async def create_shipment(files: list[UploadFile] = File(...)):
 @app.post("/api/demo/{name}")
 def demo(name: str):
     folder = DEMO / name
-    if name not in ("clean", "errors", "scanned", "bundle", "mixed") or not folder.exists():
+    if name not in ("clean", "errors", "scanned", "bundle", "mixed", "quality") or not folder.exists():
         raise HTTPException(404, "Unknown demo set")
     return {"id": _start([(p.name, p) for p in sorted(folder.iterdir()) if p.suffix.lower() in SUPPORTED])}
 

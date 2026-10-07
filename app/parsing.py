@@ -19,7 +19,10 @@ from .schemas import DOC_TYPES
 # Title keywords, checked in this order (certificate of origin before generic certificates).
 TITLE_KEYWORDS = [
     ("certificate_of_origin", ["CERTIFICATE OF ORIGIN"]),
-    ("health_certificate", ["HEALTH CERTIFICATE", "SANITARY CERTIFICATE"]),
+    ("health_certificate", ["HEALTH CERTIFICATE", "SANITARY CERTIFICATE", "PHYTOSANITARY CERTIFICATE",
+                            "QUALITY CERTIFICATE", "CERTIFICATE OF QUALITY", "CERTIFICATE OF ANALYSIS",
+                            "INSPECTION CERTIFICATE", "CERTIFICATE OF INSPECTION", "TEST CERTIFICATE",
+                            "LABORATORY TEST REPORT", "TEST REPORT"]),
     ("shipping_bill", ["SHIPPING BILL"]),
     ("packing_list", ["PACKING LIST"]),
     ("commercial_invoice", ["COMMERCIAL INVOICE", "EXPORT INVOICE", "TAX INVOICE"]),

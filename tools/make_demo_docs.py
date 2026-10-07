@@ -5,6 +5,7 @@ Produces three sets under data/demo/:
   errors/   the same six documents with 8 planted issues
   bundle/   the scanned set merged into one PDF
   mixed/    errors set with an Excel invoice and a phone-photo packing list
+  quality/  errors set with a lab quality certificate instead of the health certificate
   scanned/  the errors set, with the packing list as an image-only "scan"
 
 All companies, people and ID numbers are fictitious.
@@ -159,6 +160,21 @@ def doc_health_cert(d):
 <p>Place: Kochi | Date: {d['hc_date']} | Official Inspector (seal)</p>"""
 
 
+def doc_quality_cert(d):
+    return f"""<h1>CERTIFICATE OF QUALITY AND INSPECTION</h1>
+<p class="sub">Coastal Seafood Testing Laboratory, Kochi (fictitious; NABL-accredited format, simplified)</p>
+{kv([("Certificate No.", "CSTL/QC/2026/5521"), ("Date of issue", d['hc_date']), ("Exporter", f"{d['exporter']}, Aroor, Alappuzha, Kerala"),
+     ("Buyer", f"{d['buyer']}, Rotterdam, The Netherlands"), ("Invoice reference", d['inv_no']), ("Product", d['desc']),
+     ("HS code", d['hs']), ("Quantity inspected", f"{d['cartons']} cartons"), ("Net weight", f"{d['net']} kg"),
+     ("Gross weight", f"{d['gross']} kg"), ("Container", d['container'])])}
+<table><tr><th>Parameter</th><th>Result</th><th>Limit</th></tr>
+<tr><td>Glaze</td><td>Nil (net weight declared without glaze)</td><td>-</td></tr>
+<tr><td>Core temperature at stuffing</td><td>-19 C</td><td>-18 C or below</td></tr>
+<tr><td>Antibiotic residues (chloramphenicol, nitrofurans)</td><td>Not detected</td><td>Not detected</td></tr></table>
+<p>We certify that the goods were inspected and conform to the buyer's specification.</p>
+<p>Quality Manager (seal)</p>"""
+
+
 def doc_origin(d):
     return f"""<h1>CERTIFICATE OF ORIGIN (NON-PREFERENTIAL)</h1>
 <p class="sub">Issued by: Malabar Chamber of Trade, Kochi</p>
@@ -296,7 +312,18 @@ def main() -> None:
             merged.insert_pdf(part)
     merged.save(bundle / "shipment_KME-0093_all_documents.pdf")
     make_mixed(errors)
+    make_quality(errors)
     print(f"Wrote demo sets to {OUT}")
+
+
+def make_quality(errors: dict) -> None:
+    """quality/: errors set with a lab quality certificate instead of the EIC health certificate."""
+    folder = OUT / "quality"
+    folder.mkdir(parents=True, exist_ok=True)
+    for fname in DOCS:
+        if fname != "05_health_certificate.pdf":
+            (folder / fname).write_bytes((OUT / "errors" / fname).read_bytes())
+    render_pdf(doc_quality_cert(errors), folder / "05_quality_certificate.pdf")
 
 
 def make_mixed(errors: dict) -> None:

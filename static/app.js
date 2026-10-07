@@ -6,7 +6,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const DOC_SHORT = {
   purchase_order: "PO", commercial_invoice: "Invoice", packing_list: "Packing list",
-  shipping_bill: "Shipping bill", health_certificate: "Health cert.", certificate_of_origin: "Cert. of origin",
+  shipping_bill: "Shipping bill", health_certificate: "Quality / health cert.", certificate_of_origin: "Cert. of origin",
 };
 const STATUS_LABEL = { error: "ERROR", warning: "WARNING", pass: "PASS", skipped: "SKIPPED", info: "" };
 

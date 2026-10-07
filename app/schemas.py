@@ -12,7 +12,7 @@ DOC_TYPES = {
     "commercial_invoice": "Commercial Invoice",
     "packing_list": "Packing List",
     "shipping_bill": "Shipping Bill",
-    "health_certificate": "Health Certificate",
+    "health_certificate": "Quality / Health Certificate",
     "certificate_of_origin": "Certificate of Origin",
 }
 

@@ -55,3 +55,12 @@ def test_normalisers():
     assert N.iec("IEC AAKCK7731M") == N.iec("AAKCK7731M") == "AAKCK7731M"
     assert N.gstin("GSTIN 32AAKCK7731M1Z9") == "32AAKCK7731M1Z9"
     assert str(N.parse_date("18-09-2026")) == str(N.parse_date("18-Sep-2026")) == "2026-09-18"
+
+
+def test_certificate_titles_are_recognised():
+    from app.parsing import classify
+    for title in ("HEALTH CERTIFICATE", "QUALITY CERTIFICATE", "CERTIFICATE OF ANALYSIS", "INSPECTION CERTIFICATE",
+                  "PHYTOSANITARY CERTIFICATE", "LABORATORY TEST REPORT"):
+        assert classify(f"## {title}\n\nIssued by ...") == "health_certificate", title
+    assert classify("## CERTIFICATE OF ORIGIN (NON-PREFERENTIAL)") == "certificate_of_origin"
+    assert classify("## PACKING LIST") == "packing_list"
