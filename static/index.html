@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tally · Export Document Verification</title>
+<title>TallyTime · Export Document Verification</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
@@ -11,7 +12,7 @@
 <body>
 <header class="topbar">
   <div class="brand" role="button" tabindex="0" id="home-link">
-    <span class="logo">Tally</span>
+    <span class="logo">TallyTime</span>
     <span class="tagline">Export document verification</span>
   </div>
   <nav class="mainnav">
@@ -29,7 +30,7 @@
     <div class="hero">
       <p class="eyebrow">STEP 1 · UPLOAD THE SHIPMENT</p>
       <h1>Catch document mismatches before customs does.</h1>
-      <p class="lead">Upload the shipment's PDFs. Tally reads every document, compares each fact across them and tells you exactly what to fix, with the evidence.</p>
+      <p class="lead">Upload the shipment's PDFs. TallyTime reads every document, compares each fact across them and tells you exactly what to fix, with the evidence.</p>
     </div>
 
     <div class="upload-grid">
@@ -38,6 +39,7 @@
           <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.xlsx,.xls,.ods,.docx,.doc,.odt,.csv" multiple hidden>
           <strong>Drop documents here</strong>
           <span>PDF, photo (JPG, PNG), Excel, Word or CSV. Separate files or one merged PDF. Scans are fine.</span>
+          <span class="limits">Up to 12 files, 10 MB each, 25 pages per PDF.</span>
         </label>
         <ul id="file-list" class="file-list"></ul>
         <div class="row-actions">
@@ -107,7 +109,7 @@
   </div>
 </aside>
 
-<footer class="foot">Tally is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
+<footer class="foot">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
 <script src="ml.js"></script>
 <script src="app.js"></script>
 </body>

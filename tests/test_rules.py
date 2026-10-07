@@ -106,3 +106,49 @@ def test_letter_of_credit_checks():
     ok = {c.id: c.status for c in lc.check(clean_docs() + [_lc(latest_shipment_date="30-Sep-2026",
           description="FROZEN RAW HEADLESS SHELL-ON VANNAMEI SHRIMP (LITOPENAEUS VANNAMEI), SIZE 31/40, IQF")])}
     assert ok["lc:shipment_date"] == "pass" and ok["lc:description"] == "pass"
+
+
+def test_upload_content_checks(tmp_path):
+    import pytest
+    from app import uploads
+    fake = tmp_path / "notes.pdf"
+    fake.write_text("just text")
+    with pytest.raises(uploads.UploadError):
+        uploads.check_content(fake, "notes.pdf")
+    real = tmp_path / "invoice.pdf"
+    real.write_bytes(open("data/demo/errors/02_commercial_invoice.pdf", "rb").read())
+    uploads.check_content(real, "invoice.pdf")   # a genuine PDF passes
+
+
+def test_unrecognised_and_duplicate_files_are_flagged():
+    from app.report import build
+    from app.schemas import ParsedDocument
+    docs = errors_docs()
+    docs.append(ParsedDocument(filename="lunch_menu.pdf", doc_type=None, text="Team lunch menu", ocr_used=False, fields={}))
+    docs.append(docs[1].model_copy(update={"filename": "old_invoice.pdf"}))
+    flags = {c["id"]: c["status"] for c in build(docs)["checks"]}
+    assert flags["intake:unrecognised"] == "warning"
+    assert flags["intake:duplicate:commercial_invoice"] == "warning"
+
+
+def test_format_edge_cases():
+    assert N.number("12.000,50") == 12000.5              # European number style
+    assert N.weight_kg("26,455", "LBS") == round(26455 * 0.45359237, 3)
+    assert N.currency("US$") == N.currency("usd") == "USD"
+    assert N.hs_equal(N.hs_code("0306"), N.hs_code("03061720"))       # 4-digit heading on a certificate
+    assert not N.hs_equal(N.hs_code("0307"), N.hs_code("03061720"))
+
+
+def test_known_but_unsupported_document_is_named():
+    from app.report import build
+    from app.schemas import ParsedDocument
+    docs = errors_docs() + [ParsedDocument(filename="bl.pdf", doc_type=None, text="BILL OF LADING\nShipper ...",
+                                           ocr_used=False, fields={})]
+    checks = {c["id"]: c for c in build(docs)["checks"]}
+    assert "intake:unsupported:bl.pdf" in checks and "intake:unrecognised" not in checks
+
+
+def test_unreadable_file_is_reported():
+    from app.report import build
+    checks = build(errors_docs(), failed=[("pl.pdf", "Failed to connect to Ollama")])["checks"]
+    assert checks[0]["id"] == "intake:read_failed:pl.pdf" and "not running" in checks[0]["message"]

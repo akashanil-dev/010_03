@@ -18,7 +18,7 @@ from .schemas import DOC_TYPES, ParsedDocument
 
 TODAY = date.today
 
-# Words in LC field 46A that name a document type Tally reads.
+# Words in LC field 46A that name a document type TallyTime reads.
 REQUIRED_WORDS = {
     "commercial_invoice": ["INVOICE"],
     "packing_list": ["PACKING LIST", "PACKING"],
@@ -73,7 +73,7 @@ def check(docs: list[ParsedDocument]) -> list[Check]:
 
     # 2. Currency.
     if inv and L("currency") and _getter(inv)("currency"):
-        same = N.plain(L("currency")) == N.plain(_getter(inv)("currency"))
+        same = N.currency(L("currency")) == N.currency(_getter(inv)("currency"))
         add("currency", "Invoice currency matches the LC" if same else "Invoice currency differs from the LC",
             "pass" if same else "error",
             f"LC currency {L('currency')}, invoice currency {_getter(inv)('currency')}.",
@@ -169,9 +169,9 @@ def check(docs: list[ParsedDocument]) -> list[Check]:
                 "Prepare and upload the missing documents before presentation.")
         else:
             add("documents", "Documents required by the LC are present", "pass",
-                "Every document type Tally reads that the LC asks for is present.", [_val(lc, "documents_required")])
+                "Every document type TallyTime reads that the LC asks for is present.", [_val(lc, "documents_required")])
         if not_read:
-            add("documents_unchecked", "LC documents Tally does not check", "warning",
-                "The LC also requires: " + ", ".join(not_read) + ". Tally does not read these yet; check them by hand.",
+            add("documents_unchecked", "LC documents TallyTime does not check", "warning",
+                "The LC also requires: " + ", ".join(not_read) + ". TallyTime does not read these yet; check them by hand.",
                 [_val(lc, "documents_required")], "Check these against the LC before presentation.")
     return out

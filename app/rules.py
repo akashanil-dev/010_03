@@ -211,7 +211,12 @@ def arithmetic(docs: list[ParsedDocument]) -> list[Check]:
         qty, rate, total = N.weight_kg(g("net_weight"), g("net_weight_unit")), N.number(g("unit_price")), N.number(g("total_amount"))
         freight, fob = N.number(g("freight")), N.number(g("fob_value"))
         values = [_value(inv, k, g(k)) for k in ("net_weight", "unit_price", "total_amount", "freight", "fob_value")]
-        if None in (qty, rate, total):
+        hs_codes = set(re.findall(r"\b\d{8}\b", inv.text or ""))
+        if len(hs_codes) > 1:
+            checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
+                                status="skipped", message=f"The invoice has several product lines ({len(hs_codes)} HS codes); "
+                                "line-by-line totals are not recomputed yet."))
+        elif None in (qty, rate, total):
             checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
                                 status="skipped", message="Quantity, rate or total could not be read."))
         else:
@@ -345,14 +350,68 @@ def compliance(docs: list[ParsedDocument]) -> list[Check]:
     return checks
 
 
+def first_of_each_type(docs: list[ParsedDocument]) -> list[ParsedDocument]:
+    """Keep the first document of each type; a second invoice would otherwise be mixed into the comparison."""
+    seen, kept = set(), []
+    for d in docs:
+        if d.doc_type not in seen:
+            seen.add(d.doc_type)
+            kept.append(d)
+    return kept
+
+
+def intake_checks(docs: list[ParsedDocument]) -> list[Check]:
+    """Files that are not export documents, and document types uploaded more than once."""
+    checks = []
+    from .parsing import other_document
+
+    unknown = [d for d in docs if not d.doc_type]
+    known_other = [(d, other_document(d.text)) for d in unknown]
+    for d, name in known_other:
+        if name:
+            checks.append(Check(
+                id=f"intake:unsupported:{d.filename}", category="compliance", status="warning",
+                title=f"{name} not checked yet",
+                message=f"{d.filename} looks like a {name}. TallyTime does not check this document type yet, so it was "
+                        "not compared with the others.",
+                suggestion=f"Check the {name.lower()} against the invoice and packing list by hand."))
+    unknown = [d for d, name in known_other if not name]
+    if unknown:
+        names = ", ".join(d.filename for d in unknown)
+        checks.append(Check(
+            id="intake:unrecognised", category="compliance", status="warning",
+            title="File not recognised as an export document",
+            message=f"{names} {'does' if len(unknown) == 1 else 'do'} not look like any export document TallyTime checks "
+                    "(no purchase order, invoice, packing list, shipping bill, certificate or letter of credit title "
+                    "found). It was not checked and was not sent to the AI model.",
+            suggestion="Remove unrelated files, or make sure the document's title is visible on its first page."))
+    by_type: dict[str, list[str]] = {}
+    for d in docs:
+        if d.doc_type:
+            by_type.setdefault(d.doc_type, []).append(d.filename)
+    for t, files in by_type.items():
+        if len(files) > 1:
+            checks.append(Check(
+                id=f"intake:duplicate:{t}", category="compliance", status="warning",
+                title=f"More than one {DOC_TYPES[t]} uploaded",
+                message=f"{len(files)} files look like a {DOC_TYPES[t]}: {', '.join(files)}. Only the first, "
+                        f"{files[0]}, was compared.",
+                suggestion="Upload one document of each type per shipment; remove old or duplicate versions."))
+    if not checks:
+        checks.append(Check(id="intake:files", category="compliance", status="pass", title="All files recognised",
+                            message=f"Each of the {len(docs)} files was recognised as a different export document."))
+    return checks
+
+
 def run_all(docs: list[ParsedDocument]) -> list[dict]:
     from . import labtests, lc, readiness
 
-    docs = [d for d in docs if d.doc_type]
+    intake = intake_checks(docs)
+    docs = first_of_each_type([d for d in docs if d.doc_type])
     shipment = [d for d in docs if d.doc_type != "letter_of_credit"]   # the LC is checked against, not compared with
     product, _ = readiness.detect_product(shipment)
     destination, _ = readiness.detect_destination(shipment)
-    checks = (cross_document(shipment) + arithmetic(shipment) + compliance(shipment) + lc.check(docs)
+    checks = (intake + cross_document(shipment) + arithmetic(shipment) + compliance(shipment) + lc.check(docs)
               + labtests.check(shipment, product, destination))
     order = {"error": 0, "warning": 1, "pass": 2, "skipped": 3}
     checks.sort(key=lambda c: order[c.status])

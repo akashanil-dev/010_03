@@ -168,6 +168,18 @@ def compact(markdown: str) -> str:
     return "\n".join(l for i, l in enumerate(out) if l.strip() or (i and out[i - 1].strip()))
 
 
+# Export documents TallyTime recognises but does not check yet.
+OTHER_TITLES = [("BILL OF LADING", "Bill of lading"), ("SEA WAYBILL", "Sea waybill"), ("AIR WAYBILL", "Air waybill"),
+                ("AIRWAY BILL", "Air waybill"), ("INSURANCE", "Insurance certificate"),
+                ("FUMIGATION", "Fumigation certificate"), ("WEIGHT CERTIFICATE", "Weight certificate"),
+                ("BANK REALISATION", "Bank realisation certificate"), ("PROFORMA", "Proforma invoice")]
+
+
+def other_document(text: str) -> str | None:
+    head = (text or "")[:600].upper()
+    return next((name for word, name in OTHER_TITLES if word in head), None)
+
+
 LC_TITLES = ["DOCUMENTARY CREDIT", "LETTER OF CREDIT", "MT700", "MT 700"]
 
 

@@ -1,4 +1,4 @@
-"""Tally web API. Run: uvicorn app.main:app"""
+"""TallyTime web API. Run: uvicorn app.main:app"""
 
 import mimetypes
 import shutil
@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import report, store
+from . import report, store, uploads
 from .normalize import reference
 from .parsing import SUPPORTED, warm_up
 from .pipeline import file_hash, process_file
@@ -24,7 +24,7 @@ UPLOADS = ROOT / "data" / "uploads"
 DEMO = ROOT / "data" / "demo"
 STATIC = ROOT / "static"
 
-app = FastAPI(title="Tally: Export Document Verification")
+app = FastAPI(title="TallyTime: Export Document Verification")
 SHIPMENTS: dict[str, dict] = store.load_all()   # working copy; every change is saved to SQLite
 LOCK = threading.Lock()           # the local model reads one document at a time
 
@@ -75,7 +75,8 @@ def _process(sid: str):
                         seconds=round(time.time() - item["started"], 1))
         except Exception as exc:  # keep going with the other documents
             item.update(state="error", error=str(exc))
-    s["report"] = report.build(docs)
+    failed = [(i["filename"], i.get("error", "")) for i in s["files"] if i["state"] == "error"]
+    s["report"] = report.build(docs, failed)
     s["label"] = _label(docs) or sid
     s["state"] = "done"
     store.save(s)
@@ -111,17 +112,28 @@ def _start(files: list[tuple[str, Path]]) -> str:
 
 @app.post("/api/shipments")
 async def create_shipment(files: list[UploadFile] = File(...)):
+    if len(files) > uploads.MAX_FILES:
+        raise HTTPException(400, f"Too many files: {len(files)}. Upload at most {uploads.MAX_FILES} per shipment.")
+    names = [Path(f.filename or "").name for f in files]
+    if len(set(names)) != len(names):
+        raise HTTPException(400, "Two files have the same name. Rename one and upload again.")
     tmp = UPLOADS / "_incoming" / uuid.uuid4().hex
     tmp.mkdir(parents=True, exist_ok=True)
     try:
-        saved = []
-        for f in files:
-            if Path(f.filename or "").suffix.lower() not in SUPPORTED:
-                raise HTTPException(400, f"{f.filename}: unsupported file type. Use PDF, image (JPG/PNG/TIFF), "
-                                         "Excel, Word or CSV.")
-            p = tmp / Path(f.filename).name
-            p.write_bytes(await f.read())
-            saved.append((f.filename, p))
+        saved, problems = [], []
+        for f, name in zip(files, names):
+            if Path(name).suffix.lower() not in SUPPORTED:
+                problems.append(f"{name}: unsupported file type. Use PDF, image (JPG/PNG/TIFF), Excel, Word or CSV.")
+                continue
+            p = tmp / name
+            try:
+                await uploads.save_limited(f, p)
+                uploads.check_content(p, name)
+                saved.append((name, p))
+            except uploads.UploadError as e:
+                problems.append(str(e))
+        if problems:
+            raise HTTPException(400, " ".join(problems))
         return {"id": _start(saved)}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -169,6 +181,11 @@ def add_review(sid: str, review: Review):
     s = _get(sid)
     if review.decision not in ("confirmed", "overridden"):
         raise HTTPException(400, "decision must be 'confirmed' or 'overridden'")
+    flags = {c["id"] for c in (s.get("report") or {}).get("checks", []) if c["status"] in ("error", "warning")}
+    if review.check_id not in flags:
+        raise HTTPException(404, "No such issue on this shipment")
+    if len(review.note) > 1000:
+        raise HTTPException(400, "The note is too long (1000 characters at most)")
     if review.decision == "overridden" and not review.note.strip():
         raise HTTPException(400, "A note is required to override a flag")
     entry = review.model_dump() | {"at": datetime.now().isoformat(timespec="seconds")}

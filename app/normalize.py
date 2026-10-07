@@ -11,7 +11,9 @@ from rapidfuzz import fuzz
 
 INCOTERMS = ["EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"]
 KG_PER_UNIT = {"kg": 1, "kgs": 1, "kilogram": 1, "kilograms": 1, "kilo": 1,
-               "mt": 1000, "mts": 1000, "t": 1000, "ton": 1000, "tons": 1000, "tonne": 1000, "tonnes": 1000}
+               "mt": 1000, "mts": 1000, "t": 1000, "ton": 1000, "tons": 1000, "tonne": 1000, "tonnes": 1000,
+               "lb": 0.45359237, "lbs": 0.45359237, "pound": 0.45359237, "pounds": 0.45359237, "g": 0.001, "gm": 0.001,
+               "grams": 0.001}
 PORT_ALIASES = {"KOCHI": "COCHIN", "BOMBAY": "MUMBAI", "MADRAS": "CHENNAI"}
 DATE_FORMATS = ["%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%d %b %Y", "%d %B %Y", "%b %d, %Y",
                 "%d-%B-%Y", "%d-%b-%y", "%d/%m/%y"]
@@ -25,6 +27,9 @@ def number(raw: str | None) -> float | None:
     """'1,200' -> 1200.0, '84,94,300.00' -> 8494300.0, '1200 CTNS' -> 1200.0"""
     if not raw:
         return None
+    eu = re.search(r"\d{1,3}(?:\.\d{3})+,\d+", raw)   # European style: 12.000,50
+    if eu:
+        return float(eu.group().replace(".", "").replace(",", "."))
     m = re.search(r"-?\d[\d,]*(?:\.\d+)?", raw)
     if not m:
         return None
@@ -73,7 +78,7 @@ def hs_code(raw: str | None) -> str | None:
 def hs_equal(a: str, b: str) -> bool:
     """Equal when they agree on all the digits both carry (a certificate may only show 6 digits)."""
     n = min(len(a), len(b))
-    return n >= 6 and a[:n] == b[:n]
+    return n >= 4 and a[:n] == b[:n]   # a certificate may carry only 4 or 6 digits
 
 
 def company(raw: str | None) -> str | None:
@@ -144,6 +149,17 @@ def gstin(raw: str | None) -> str | None:
     """'GSTIN 32AAKCK7731M1Z9' -> '32AAKCK7731M1Z9' (15 characters, starts with the state code)."""
     m = re.search(r"\b\d{2}[A-Z0-9]{13}\b", (raw or "").upper())
     return m.group() if m else None
+
+
+CURRENCY_ALIASES = {"US$": "USD", "$": "USD", "US DOLLARS": "USD", "US DOLLAR": "USD", "€": "EUR", "EURO": "EUR",
+                    "EUROS": "EUR", "₹": "INR", "RS": "INR", "RUPEES": "INR", "£": "GBP", "¥": "JPY", "YEN": "JPY"}
+
+
+def currency(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    up = raw.strip().upper().rstrip(".")
+    return CURRENCY_ALIASES.get(up, up)
 
 
 def plain(raw: str | None) -> str | None:

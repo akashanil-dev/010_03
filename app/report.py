@@ -8,8 +8,16 @@ MATRIX_FIELDS = ["cartons", "net_weight", "gross_weight", "hs_code", "exporter_n
                  "container_no", "description", "doc_date"]
 
 
-def build(docs: list[ParsedDocument]) -> dict:
+def build(docs: list[ParsedDocument], failed: list[tuple[str, str]] = ()) -> dict:
     checks = rules.run_all(docs)
+    for name, err in failed:
+        reason = ("the AI model is not running or not reachable" if "connect" in err.lower() or "refused" in err.lower()
+                  else err[:160])
+        checks.insert(0, {"id": f"intake:read_failed:{name}", "category": "compliance", "status": "error",
+                          "title": "A file could not be read", "field": None, "values": [], "owners": [],
+                          "message": f"{name} could not be read: {reason}. It is missing from every check, so the "
+                                     "result below is incomplete.",
+                          "suggestion": "Fix the cause (for example start Ollama) and run the check again."})
     for c in checks:
         blamed = sorted({v["doc_type"] for v in c.get("values", []) if v.get("outlier")})
         c["owners"] = [OWNERS[t] for t in blamed] or (["Export documentation"] if c["status"] in ("error", "warning") else [])
@@ -43,7 +51,21 @@ def build(docs: list[ParsedDocument]) -> dict:
         } for d in docs],
         "matrix": matrix(known, checks),
         "readiness": readiness.build(docs),
+        "coverage": coverage(docs),
     }
+
+
+def coverage(docs: list[ParsedDocument]) -> list[dict]:
+    """Which expected document types are present: required ones block filing, the others are expected."""
+    present = {d.doc_type for d in docs if d.doc_type}
+    order = ["purchase_order", "commercial_invoice", "packing_list", "shipping_bill", "health_certificate",
+             "certificate_of_origin"]
+    out = [{"doc_type": t, "doc_name": DOC_TYPES[t], "present": t in present, "required": t in rules.REQUIRED}
+           for t in order]
+    if "letter_of_credit" in present:
+        out.append({"doc_type": "letter_of_credit", "doc_name": DOC_TYPES["letter_of_credit"], "present": True,
+                    "required": False})
+    return out
 
 
 def matrix(docs: list[ParsedDocument], checks: list[dict]) -> dict:

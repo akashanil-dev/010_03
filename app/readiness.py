@@ -84,7 +84,7 @@ def build(docs: list[ParsedDocument]) -> dict:
             "Uploaded." if t in present else "Not uploaded. Needed for customs clearance.")
     add("Core documents", "Purchase order / contract", "ok" if "purchase_order" in present else "check",
         "Uploaded; used as the reference for what was ordered." if "purchase_order" in present
-        else "Not uploaded. Without it Tally cannot check the invoice against the contract.")
+        else "Not uploaded. Without it TallyTime cannot check the invoice against the contract.")
 
     # Registrations.
     iec = N.iec(_raw(inv, "iec")) or N.iec(_raw(sb, "iec"))

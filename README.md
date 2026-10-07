@@ -1,12 +1,12 @@
-# Tally: Export Document Verification
+# TallyTime: Export Document Verification
 
 **KeralAI Grand Challenge 2026 · Team 10 · Challenge 3: Export Document Verification System**
 
-Tally reads the documents of an export shipment (purchase order, commercial invoice, packing list, shipping bill, health certificate, certificate of origin), compares every shared fact across them and flags discrepancies **before** the shipment reaches customs or the buyer's bank. Every flag shows the exact source text it is based on, and a person confirms or overrides it.
+TallyTime reads the documents of an export shipment (purchase order, commercial invoice, packing list, shipping bill, health certificate, certificate of origin), compares every shared fact across them and flags discrepancies **before** the shipment reaches customs or the buyer's bank. Every flag shows the exact source text it is based on, and a person confirms or overrides it.
 
 > **AI reads, rules judge.** An AI model (IBM Granite, running locally) only *extracts* values. Every pass/fail decision comes from deterministic, inspectable rules.
 
-**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use Tally, step by step](#how-to-use-tally-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
+**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use TallyTime, step by step](#how-to-use-tally-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
 
 ## Features
 
@@ -14,7 +14,7 @@ Tally reads the documents of an export shipment (purchase order, commercial invo
 - **Shipment Truth Matrix:** every shared field across every document on one screen; the likely wrong value is highlighted; click a value to see the exact text it was read from.
 - **Issues with evidence:** plain-English explanation, suggested fix, each document's value and source text; **confirm or override** with a note (overrides require one), recorded in an **audit log**.
 - **Export readiness checklist:** product detected from the HS code, destination from the port. Checks core documents, IEC, GSTIN, LUT reference and its financial year, MPEDA registration, and the EIC health certificate for seafood to the EU. Uncertain items are marked *check* rather than asserted.
-- **Letter of credit compliance (UCP 600):** upload the LC and Tally checks the whole set against its terms before it goes to the bank: amount within the credit plus tolerance, shipment by the latest shipment date, presentation deadline, ports, Incoterms, invoice description corresponding with the credit, beneficiary/applicant, and the documents the LC requires. A set that agrees with itself can still break the LC; this catches that.
+- **Letter of credit compliance (UCP 600):** upload the LC and TallyTime checks the whole set against its terms before it goes to the bank: amount within the credit plus tolerance, shipment by the latest shipment date, presentation deadline, ports, Incoterms, invoice description corresponding with the credit, beneficiary/applicant, and the documents the LC requires. A set that agrees with itself can still break the LC; this catches that.
 - **Lab result screening:** reads the results on quality / health certificates. A detected banned antibiotic (chloramphenicol, nitrofurans and their metabolites, malachite green) or ethylene oxide above the EU limit of 0.1 mg/kg is flagged as a blocking error. Plain rules, no AI.
 - **Money and deadlines:** flags a shipping bill that claims no RoDTEP or drawback (the claim must be made on the shipping bill), and shows the 3-month amendment window and the 15-month export-proceeds deadline.
 - **New rules for Kerala products:** EUDR due diligence for natural rubber to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
@@ -80,19 +80,19 @@ pytest -q
 
 ---
 
-## How to use Tally (step by step)
+## How to use TallyTime (step by step)
 
-### A. Starting Tally each time
+### A. Starting TallyTime each time
 
 After the one-time setup above, every session starts with three commands in a terminal, from the project folder:
 
 ```bash
 ollama serve &                            # 1. start the local AI model (skip if Ollama runs as a service)
 source .venv/bin/activate                 # 2. activate the Python environment
-uvicorn app.main:app --port 8000          # 3. start Tally
+uvicorn app.main:app --port 8000          # 3. start TallyTime
 ```
 
-Wait until the terminal prints `Application startup complete`, then open **http://localhost:8000** in a browser. Leave the terminal open; press `Ctrl+C` in it to stop Tally.
+Wait until the terminal prints `Application startup complete`, then open **http://localhost:8000** in a browser. Leave the terminal open; press `Ctrl+C` in it to stop TallyTime.
 
 > The very first document after starting takes longer (the reading models load into memory). Run one demo first if you are about to present.
 
@@ -122,7 +122,15 @@ A demo that has run once before loads instantly from the cache. Reading a set fo
 4. Click **Check documents**.
 5. **Wait on the progress screen.** Each file shows its state: *Checking whether this file holds several documents* (merged PDFs only), *Reading… N s*, then the detected document type and how it was read (for example *Excel file, read directly* or *Photo / image, OCR used*). When every file is done, the results open automatically.
 
-Tally recognises a document by its title: purchase order, commercial invoice, packing list, shipping bill, quality / health / inspection certificate, certificate of origin, and letter of credit. A file it cannot recognise is listed as *Unrecognised* and left out of the comparison.
+**Upload limits:** up to **12 files** per shipment, **10 MB** per file, **25 pages** per PDF. Each file's content must really be the type its extension says (a text file renamed to `.pdf` is rejected), and empty or password-protected files are refused. Problems are listed before anything is read.
+
+**What happens with missing, unrelated or duplicate files:**
+
+- **Missing documents** show in the verdict banner as a checklist (✓ uploaded, ✗ missing). A missing commercial invoice, packing list or shipping bill is an **error**; a missing purchase order, certificate or certificate of origin is a **warning**.
+- A file that is **not an export document** (no recognised title) is flagged with a warning and skipped. It is never sent to the AI model, so it costs almost no time.
+- If the **same type is uploaded twice** (for example an old and a new invoice), only the first is compared and a warning names both files.
+
+TallyTime recognises a document by its title: purchase order, commercial invoice, packing list, shipping bill, quality / health / inspection certificate, certificate of origin, and letter of credit. A file it cannot recognise is listed as *Unrecognised* and left out of the comparison.
 
 ### D. Reading the results
 
@@ -154,12 +162,12 @@ The results are organised in tabs:
    - **Copy text** copies it to paste anywhere.
 
    Switch the issue language to മലയാളം first to send the list in Malayalam. Overridden issues are left out.
-4. **Readiness**: the export readiness checklist. Tally detects the **product** from the HS code (seafood, spices, rubber, general) and the **destination** from the port, then lists:
+4. **Readiness**: the export readiness checklist. TallyTime detects the **product** from the HS code (seafood, spices, rubber, general) and the **destination** from the port, then lists:
    - **OK**: present or valid;
    - **MISSING**: required and absent (for example the LUT reference, or an EIC health certificate for seafood to the EU);
    - **CHECK**: a person should confirm (for example no RoDTEP claimed, farm traceability, EUDR for rubber);
    - **DATE**: key deadlines (shipping-bill amendment window, export-proceeds deadline).
-5. **All checks**: every check Tally ran, grouped as *Across documents*, *Within a document*, *Compliance*, *Letter of credit* and *Lab results*, with PASS / ERROR / WARNING / SKIPPED. SKIPPED means a value needed for the check was not on the documents.
+5. **All checks**: every check TallyTime ran, grouped as *Across documents*, *Within a document*, *Compliance*, *Letter of credit* and *Lab results*, with PASS / ERROR / WARNING / SKIPPED. SKIPPED means a value needed for the check was not on the documents.
 6. **Documents**: one card per document: type, how it was read, time taken, number of fields, any values to check by hand, the full list of extracted fields (click **Extracted fields**), and **Open original file**.
 7. **Audit log**: every confirm and override, with the note and time.
 
@@ -212,15 +220,19 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 
 | Problem | Fix |
 |---|---|
-| Browser says the site can't be reached | Tally is not running. Start it with step A and keep the terminal open. |
+| Browser says the site can't be reached | TallyTime is not running. Start it with step A and keep the terminal open. |
 | A document stays on *Reading…* or fails with "connection refused" | Ollama is not running. Run `ollama serve &` and check `curl http://localhost:11434/api/version`. |
 | `model "granite4:micro" not found` | Run `ollama pull granite4:micro`. |
-| `address already in use` when starting | Another Tally is running. Stop it, or start on another port: `uvicorn app.main:app --port 8001`. |
+| `address already in use` when starting | Another TallyTime is running. Stop it, or start on another port: `uvicorn app.main:app --port 8001`. |
 | A file is rejected as unsupported | Use PDF, JPG/PNG/TIFF, Excel, Word or CSV. iPhone HEIC photos: export as JPG first. |
-| A document shows as *Unrecognised* | Its title is not one Tally knows. Check that the document's heading says what it is (for example "Packing List"). |
+| "larger than 10 MB" | Compress the PDF or photo, or split it. Phone photos can usually be saved at a lower resolution. |
+| "the content is not a real PDF file" | The file was renamed rather than exported. Open it in its own program and export or "Save as" PDF. |
+| "password-protected" | Remove the password (open it, then print or save a copy without protection) and upload again. |
+| "Too many files" | Check at most 12 files per shipment; leave out duplicates and unrelated files. |
+| A document shows as *Unrecognised* | Its title is not one TallyTime knows. Check that the document's heading says what it is (for example "Packing List"). |
 | A value is marked "check by hand" | It was not found word for word in the document (often OCR on a poor photo). Open the file from the side panel and compare. |
 | The first document is very slow | Normal: models load on first use. Later documents are faster, and repeated documents are instant. |
-| "This check was interrupted by a server restart" | Tally was restarted while reading. Upload the documents again. |
+| "This check was interrupted by a server restart" | TallyTime was restarted while reading. Upload the documents again. |
 
 ---
 
@@ -238,7 +250,7 @@ Format differences are **normalised first, not flagged**: `12.000 MTS` = `12,000
 
 ### The document hierarchy
 
-When documents disagree, Tally names the **likely outlier** using a majority vote, with ties broken by the document hierarchy:
+When documents disagree, TallyTime names the **likely outlier** using a majority vote, with ties broken by the document hierarchy:
 
 ```
 Purchase order  →  Commercial invoice  →  Packing list  →  Shipping bill / certificates
@@ -272,6 +284,7 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/lc.py` | Letter of credit compliance checks |
 | `app/labtests.py` | Lab result screening on certificates |
 | `app/store.py` | SQLite history and dashboard statistics |
+| `app/uploads.py` | Upload limits and file-content validation |
 | `app/extract.py` | LLM field extraction and source-text verification |
 | `app/llm.py` | Provider switch: local Ollama (default) or IBM watsonx |
 | `app/normalize.py` | Deterministic normalisers |
@@ -291,7 +304,7 @@ The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six docu
 
 | Set | Result |
 |---|---|
-| Clean | Ready. 0 false flags (24 of 24 evaluated checks pass) |
+| Clean | Ready. 0 false flags (25 of 25 evaluated checks pass) |
 | Errors | Blocked. **8 of 8** planted issues caught (7 errors + 1 warning), plus the packing-list arithmetic error that follows from the wrong carton count. The 3 format traps are not flagged. |
 | Errors + scanned packing list | Same result as the errors set; OCR read the scan correctly |
 | Mixed formats (Excel invoice, phone-photo packing list tilted 3.5°, PDFs) | Same result: **8 of 8** caught. Without automatic straightening the tilted photo lost the carton error; with it every field was read correctly. |
@@ -309,9 +322,9 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 - **Evidence for every flag.** Each value shows the document text it came from; values not found word for word are marked "check by hand".
 - **AI reads, rules judge.** The model never decides pass or fail. Rules are plain Python in `app/rules.py`.
 - **Human in the loop.** Every flag can be confirmed or overridden. An override requires a note, and every decision is logged with a time.
-- **Local by default.** Documents are parsed and read on the machine running Tally. Nothing is sent to an external service unless `LLM_PROVIDER=watsonx` is set.
+- **Local by default.** Documents are parsed and read on the machine running TallyTime. Nothing is sent to an external service unless `LLM_PROVIDER=watsonx` is set.
 - **Data minimisation.** Email addresses and phone numbers are masked before text is stored or sent to the model (in the spirit of India's DPDP Act 2023). Uploaded files can be deleted from the results screen.
-- **Not legal advice.** Tally is decision support; a licensed customs broker makes the final call.
+- **Not legal advice.** TallyTime is decision support; a licensed customs broker makes the final call.
 
 ## Limitations
 

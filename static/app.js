@@ -1,4 +1,4 @@
-// Tally front end: upload, progress, results. Plain JavaScript, no framework.
+// TallyTime front end: upload, progress, results. Plain JavaScript, no framework.
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -40,12 +40,20 @@ function renderFileList() {
   $("#btn-clear").hidden = selected.length === 0;
 }
 
+const MAX_FILE_MB = 10;
+const MAX_FILES = 12;
+
 function addFiles(files) {
+  const problems = [];
   for (const f of files) {
+    if (f.size > MAX_FILE_MB * 1024 * 1024) { problems.push(`${f.name} is ${(f.size / 1048576).toFixed(1)} MB; the limit is ${MAX_FILE_MB} MB per file.`); continue; }
+    if (f.size === 0) { problems.push(`${f.name} is empty.`); continue; }
+    if (selected.length >= MAX_FILES && !selected.some((s) => s.name === f.name)) { problems.push(`At most ${MAX_FILES} files per shipment; ${f.name} was not added.`); continue; }
     const ext = f.name.toLowerCase().split(".").pop();
-    if (!ACCEPTED.includes(ext)) { alert(`${f.name}: unsupported file type. Use PDF, image, Excel, Word or CSV.`); continue; }
+    if (!ACCEPTED.includes(ext)) { problems.push(`${f.name}: unsupported file type. Use PDF, image, Excel, Word or CSV.`); continue; }
     if (!selected.some((s) => s.name === f.name)) selected.push(f);
   }
+  if (problems.length) alert(problems.join("\n"));
   renderFileList();
 }
 
@@ -164,6 +172,8 @@ function renderVerdict() {
         <div class="stat"><b>${v.reviewed}/${v.total}</b><span>flags reviewed</span></div>
         <div class="stat"><b>${r.documents.length}</b><span>documents read</span></div>
       </div>
+      <div class="coverage">${(r.coverage || []).map((c) => `<span class="cov ${c.present ? "ok" : c.required ? "missing" : "absent"}"
+        title="${c.present ? "Uploaded" : c.required ? "Required: missing" : "Expected: not uploaded"}">${c.present ? "✓" : "✗"} ${esc(c.doc_name)}${c.present ? "" : c.required ? " · missing" : " · not uploaded"}</span>`).join("")}</div>
     </div>
     <div class="verdict-actions">
       <button class="btn small" id="btn-print">Print / save report</button>
@@ -259,9 +269,16 @@ function renderIssues() {
     const review = r
       ? `<div class="review-box"><div class="review-done"><b class="${r.decision}">${r.decision === "confirmed" ? "Confirmed as a real problem" : "Overridden (accepted as is)"}</b> by ${esc(r.reviewer)} at ${esc(r.at.replace("T", " "))}${r.note ? ` · “${esc(r.note)}”` : ""}</div><button class="btn small ghost" data-change="${esc(c.id)}">Change</button></div>`
       : `<div class="review-box">
-           <textarea placeholder="Note for the audit log (required to override)" id="note-${esc(c.id)}"></textarea>
-           <button class="btn small primary" data-review="confirmed" data-id="${esc(c.id)}">Confirm issue</button>
-           <button class="btn small" data-review="overridden" data-id="${esc(c.id)}">Override</button>
+           <div class="review-head"><b>Your decision</b>
+             <span class="muted">Confirm it as a real problem, or override it if it is acceptable. Both are saved to the audit log.</span></div>
+           <label class="sr-only" for="note-${esc(c.id)}">Reason for your decision</label>
+           <textarea maxlength="1000" placeholder="Why? (optional to confirm, required to override)" id="note-${esc(c.id)}"></textarea>
+           <div class="review-actions">
+             <button class="btn small primary" data-review="confirmed" data-id="${esc(c.id)}"
+               title="This is a real problem. It stays open and keeps the shipment blocked until fixed.">Confirm issue</button>
+             <button class="btn small" data-review="overridden" data-id="${esc(c.id)}"
+               title="This is acceptable as it is. It stops counting against the verdict. A reason is required.">Override</button>
+           </div>
          </div>`;
     return `<article class="issue ${c.status} ${r ? "reviewed" : ""}" id="issue-${esc(c.id)}">
       <div class="issue-head"><h3><span class="sev ${c.status}">${STATUS_LABEL[c.status]}</span>${esc(c.title)}</h3><span class="cat">${esc(c.category)}</span></div>
@@ -356,7 +373,7 @@ function printReport() {
       ${(c.values || []).length ? `<table>${c.values.map((x) => `<tr${x.outlier ? ' class="o"' : ""}><td>${esc(x.doc_name)}</td><td>${esc(x.display ?? x.raw ?? "—")}</td></tr>`).join("")}</table>` : ""}
       <p class="rv">${rv ? `Review: ${rv.decision === "confirmed" ? "confirmed" : "overridden"} by ${esc(rv.reviewer)} at ${esc(rv.at.replace("T", " "))}${rv.note ? `, note: “${esc(rv.note)}”` : ""}` : "Review: pending"}</p></div>`;
   }).join("") || "<p>No issues found.</p>";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Tally review report</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>TallyTime review report</title><style>
     body{font:12px/1.45 "IBM Plex Sans",Arial,sans-serif;color:#0B1F33;margin:28px}
     h1{font-size:22px;margin:0} h2{font-size:15px;border-bottom:2px solid #0B1F33;padding-bottom:3px;margin-top:20px}
     h3{font-size:13px;margin:0 0 4px} .stamp{display:inline-block;border:3px solid #C41E33;color:#C41E33;font:700 16px monospace;letter-spacing:2px;padding:4px 10px;transform:rotate(-2deg);margin:8px 0}
@@ -364,14 +381,14 @@ function printReport() {
     .i{border-left:4px solid #C41E33;padding:6px 10px;margin:8px 0;page-break-inside:avoid} .i.warning{border-color:#A8540A}
     table{border-collapse:collapse;margin:4px 0} td{border:1px solid #ccc;padding:2px 6px;font-family:monospace} tr.o td{background:#FBE3E6;color:#C41E33}
     .rv{color:#555} .m{color:#555} li{margin:2px 0}</style></head><body>
-    <h1>Tally · Export document review</h1>
+    <h1>TallyTime · Export document review</h1>
     <p class="m">Generated ${new Date().toLocaleString()} · Shipment ${esc(current.id)}</p>
     <div class="stamp ${v.verdict}">${stamp}</div>
     <p>${r.counts.errors} errors · ${r.counts.warnings} warnings · ${r.counts.passed}/${r.counts.evaluated} checks passed · ${v.reviewed}/${v.total} flags reviewed</p>
     <h2>Documents</h2><ul>${r.documents.map((d) => `<li>${esc(d.doc_name)}: ${esc(d.filename)}${d.ocr_used ? " (scanned, OCR)" : ""}</li>`).join("")}</ul>
     <h2>Issues</h2>${issues}
     <h2>Checks passed</h2><ul>${r.checks.filter((c) => c.status === "pass").map((c) => `<li>${esc(c.title)}: ${esc(c.message)}</li>`).join("")}</ul>
-    <p class="m" style="margin-top:20px">Tally is decision support, not legal or customs advice. A licensed customs broker makes the final call. Values were extracted by an AI model and checked by deterministic rules; each value's source text is shown in the app.</p>
+    <p class="m" style="margin-top:20px">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call. Values were extracted by an AI model and checked by deterministic rules; each value's source text is shown in the app.</p>
     <script>window.onload=()=>window.print()<\/script></body></html>`;
   const w = window.open("", "_blank");
   w.document.write(html);
@@ -391,7 +408,7 @@ function fixText(owner, items) {
     return `${i + 1}. ${c.status === "error" ? "[ERROR]" : "[WARNING]"} ${c.title}: ${text}`;
   });
   const head = lang === "ml" ? `${ML_UI.fixesFor} (${owner})\n${ML_UI.shipment}: ${label}` : `Document fixes needed (${owner})\nShipment: ${label}`;
-  const foot = lang === "ml" ? ML_UI.footer : "Found by Tally before filing. Please correct and send the updated document.";
+  const foot = lang === "ml" ? ML_UI.footer : "Found by TallyTime before filing. Please correct and send the updated document.";
   return `${head}\n\n${lines.join("\n")}\n\n${foot}`;
 }
 
@@ -439,7 +456,7 @@ function renderReadiness() {
     ${groups.map((g) => `<div class="check-group"><h3>${esc(g)}</h3>${r.items.filter((i) => i.group === g).map((i) => `
       <div class="check-row"><span><span class="rtag ${i.status}">${label[i.status]}</span></span>
         <div><div class="t">${esc(i.item)}</div><div class="m">${esc(i.detail)}</div></div></div>`).join("")}</div>`).join("")}
-    <p class="muted" style="font-size:13px">Requirements depend on the buyer and the importing country. Items marked CHECK need a person to confirm; Tally does not assert rules it cannot verify.</p>`;
+    <p class="muted" style="font-size:13px">Requirements depend on the buyer and the importing country. Items marked CHECK need a person to confirm; TallyTime does not assert rules it cannot verify.</p>`;
 }
 
 /* ---------- dashboard ---------- */
