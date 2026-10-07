@@ -158,7 +158,7 @@ function renderResults() {
 function renderVerdict() {
   const r = current.report;
   const v = effectiveVerdict();
-  const stampText = { blocked: "BLOCKED", review: "NEEDS REVIEW", ready: "READY TO FILE" }[v.verdict];
+  const stampText = { blocked: "FIX BEFORE FILING", review: "NEEDS REVIEW", ready: "READY TO FILE" }[v.verdict];
   let title, sub;
   if (v.verdict === "blocked") {
     title = `${v.openErrors.length} ${v.openErrors.length === 1 ? "error" : "errors"} to fix before filing`;
@@ -190,8 +190,8 @@ function renderVerdict() {
       <button class="btn small" id="btn-new">New shipment</button>
       <button class="btn small danger" id="btn-delete">Delete uploaded files</button>
     </div>`;
-  $("#btn-print").onclick = printReport;
-  $("#btn-export").onclick = printReport;
+  $("#btn-print").onclick = askReportLanguage;
+  $("#btn-export").onclick = askReportLanguage;
   $("#btn-new").onclick = goHome;
   $("#btn-delete").onclick = deleteShipment;
   const open = v.openErrors.length + v.openWarnings.length;
@@ -288,7 +288,7 @@ function renderIssues() {
            <textarea maxlength="1000" placeholder="Why? (optional to confirm, required to override)" id="note-${esc(c.id)}"></textarea>
            <div class="review-actions">
              <button class="btn small primary" data-review="confirmed" data-id="${esc(c.id)}"
-               title="This is a real problem. It stays open and keeps the shipment blocked until fixed.">Confirm issue</button>
+               title="This is a real problem. It stays open, and the shipment stays at "Fix before filing" until it is fixed.">Confirm issue</button>
              <button class="btn small" data-review="overridden" data-id="${esc(c.id)}"
                title="This is acceptable as it is. It stops counting against the verdict. A reason is required.">Override</button>
            </div>
@@ -433,46 +433,103 @@ async function deleteShipment() {
 }
 
 /* ---------- printable report ---------- */
-function printReport() {
+/* ---------- printable report (English or Malayalam) ---------- */
+const REPORT_TEXT = {
+  en: {
+    title: "TallyTime · Export document review", generated: "Generated", shipment: "Shipment",
+    runHead: "TallyTime · Export document review", runFoot: "Decision support, not legal or customs advice",
+    page: ["Page ", " of "],
+    stamp: { blocked: "FIX BEFORE FILING", review: "NEEDS REVIEW", ready: "READY TO FILE" },
+    summary: (r, v) => `${r.counts.errors} errors · ${r.counts.warnings} warnings · ${r.counts.passed}/${r.counts.evaluated} checks passed · ${v.reviewed}/${v.total} flags reviewed`,
+    documents: "Documents", scanned: "scanned, OCR", issues: "Issues", noIssues: "No issues found.",
+    sev: { error: "ERROR", warning: "WARNING" }, fix: "Suggested fix",
+    review: (rv) => rv ? `Review: ${rv.decision === "confirmed" ? "confirmed" : "overridden"} by ${esc(rv.reviewer)} at ${esc(rv.at.replace("T", " "))}${rv.note ? `, note: “${esc(rv.note)}”` : ""}` : "Review: pending",
+    passed: (n, m) => `Checks passed (${n} of ${m})`, nonePassed: "None of the checks passed.",
+    finalTitle: "Final verdict",
+    conclusion: (v) => ({
+      blocked: `Not ready to file. ${v.openErrors.length} ${v.openErrors.length === 1 ? "error is" : "errors are"} still open and must be fixed (or overridden with a reason) before the documents go to customs or the bank.`,
+      review: `No open errors, but ${v.openWarnings.length} ${v.openWarnings.length === 1 ? "warning needs" : "warnings need"} a decision before filing.`,
+      ready: v.overridden ? `Ready to file. Every flag was reviewed; ${v.overridden} ${v.overridden === 1 ? "was" : "were"} overridden by a reviewer, with the reasons listed above.`
+                          : "Ready to file. Every check passed on these documents.",
+    })[v.verdict],
+    tally: (r, v, confirmed) => `${r.counts.errors} ${r.counts.errors === 1 ? "error" : "errors"} and ${r.counts.warnings} ${r.counts.warnings === 1 ? "warning" : "warnings"} found · ${confirmed} confirmed · ${v.overridden} overridden · ${v.total - v.reviewed} not yet reviewed.`,
+    disclaimer: "TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call. Values were extracted by an AI model and checked by deterministic rules; each value's source text is shown in the app.",
+  },
+  ml: {
+    title: "TallyTime · കയറ്റുമതി രേഖ പരിശോധനാ റിപ്പോർട്ട്", generated: "തയ്യാറാക്കിയത്", shipment: "ഷിപ്പ്മെന്റ്",
+    runHead: "TallyTime · കയറ്റുമതി രേഖ പരിശോധന", runFoot: "സഹായ ഉപകരണം മാത്രം; നിയമോപദേശമല്ല",
+    page: ["പേജ് ", " / "],
+    stamp: { blocked: "തിരുത്തിയ ശേഷം ഫയൽ ചെയ്യുക · FIX BEFORE FILING", review: "തീരുമാനം വേണം · NEEDS REVIEW", ready: "ഫയൽ ചെയ്യാൻ തയ്യാർ · READY TO FILE" },
+    summary: (r, v) => `${r.counts.errors} പിഴവുകൾ · ${r.counts.warnings} മുന്നറിയിപ്പുകൾ · ${r.counts.passed}/${r.counts.evaluated} പരിശോധനകൾ ശരി · ${v.reviewed}/${v.total} ഫ്ലാഗുകളിൽ തീരുമാനമെടുത്തു`,
+    documents: "രേഖകൾ", scanned: "സ്കാൻ ചെയ്തത്, OCR", issues: "പ്രശ്നങ്ങൾ", noIssues: "പ്രശ്നങ്ങളൊന്നും കണ്ടെത്തിയില്ല.",
+    sev: { error: "പിഴവ്", warning: "മുന്നറിയിപ്പ്" }, fix: "നിർദ്ദേശിക്കുന്ന തിരുത്തൽ (English)",
+    review: (rv) => rv ? `തീരുമാനം: ${esc(rv.reviewer)} ${rv.decision === "confirmed" ? "പ്രശ്നമാണെന്ന് സ്ഥിരീകരിച്ചു" : "ഈ ഫ്ലാഗ് അനുവദിച്ചു (override)"} · ${esc(rv.at.replace("T", " "))}${rv.note ? ` · കുറിപ്പ്: “${esc(rv.note)}”` : ""}` : "തീരുമാനം: ബാക്കിയുണ്ട്",
+    passed: (n, m) => `ശരിയായ പരിശോധനകൾ (${m}-ൽ ${n})`, nonePassed: "ഒരു പരിശോധനയും ശരിയായില്ല.",
+    finalTitle: "അന്തിമ തീരുമാനം",
+    conclusion: (v) => ({
+      blocked: `ഫയൽ ചെയ്യാൻ തയ്യാറല്ല. ${v.openErrors.length} പിഴവുകൾ ഇപ്പോഴും തീർപ്പാകാതെയുണ്ട്. രേഖകൾ കസ്റ്റംസിനോ ബാങ്കിനോ അയക്കുന്നതിന് മുമ്പ് അവ തിരുത്തുകയോ കാരണം സഹിതം override ചെയ്യുകയോ വേണം.`,
+      review: `തീർപ്പാകാത്ത പിഴവുകളില്ല. എന്നാൽ ഫയൽ ചെയ്യുന്നതിന് മുമ്പ് ${v.openWarnings.length} മുന്നറിയിപ്പുകളിൽ തീരുമാനമെടുക്കണം.`,
+      ready: v.overridden ? `ഫയൽ ചെയ്യാൻ തയ്യാർ. എല്ലാ ഫ്ലാഗുകളിലും തീരുമാനമെടുത്തു; ${v.overridden} എണ്ണം കാരണം സഹിതം override ചെയ്തു (മുകളിൽ കാണാം).`
+                          : "ഫയൽ ചെയ്യാൻ തയ്യാർ. എല്ലാ പരിശോധനകളും ശരിയാണ്.",
+    })[v.verdict],
+    tally: (r, v, confirmed) => `${r.counts.errors} പിഴവുകൾ, ${r.counts.warnings} മുന്നറിയിപ്പുകൾ · ${confirmed} സ്ഥിരീകരിച്ചു · ${v.overridden} override ചെയ്തു · ${v.total - v.reviewed} എണ്ണത്തിൽ തീരുമാനം ബാക്കി.`,
+    disclaimer: "TallyTime ഒരു സഹായ ഉപകരണം മാത്രമാണ്; നിയമപരമോ കസ്റ്റംസ് സംബന്ധമോ ആയ ഉപദേശമല്ല. അന്തിമ തീരുമാനം ലൈസൻസുള്ള കസ്റ്റംസ് ബ്രോക്കറുടേതാണ്. വിവരങ്ങൾ AI മോഡൽ രേഖകളിൽ നിന്ന് വായിച്ചെടുത്ത് നിയമങ്ങൾ ഉപയോഗിച്ച് പരിശോധിച്ചതാണ്.",
+  },
+};
+
+function askReportLanguage() {
+  const dlg = $("#report-dialog");
+  dlg.hidden = false;
+  dlg.querySelector("[data-report-lang]").focus();
+}
+
+function printReport(reportLang = "en") {
+  const T = REPORT_TEXT[reportLang] || REPORT_TEXT.en;
+  const ml = reportLang === "ml";
   const r = current.report, v = effectiveVerdict(), reviews = current.reviews || {};
-  const stamp = { blocked: "BLOCKED", review: "NEEDS REVIEW", ready: "READY TO FILE" }[v.verdict];
+  const stamp = T.stamp[v.verdict];
   const passed = r.checks.filter((c) => c.status === "pass");
   const confirmed = flags().filter((c) => reviews[c.id]?.decision === "confirmed").length;
-  const conclusion = {
-    blocked: `Not ready to file. ${v.openErrors.length} ${v.openErrors.length === 1 ? "error is" : "errors are"} still open and must be fixed (or overridden with a reason) before the documents go to customs or the bank.`,
-    review: `No open errors, but ${v.openWarnings.length} ${v.openWarnings.length === 1 ? "warning needs" : "warnings need"} a decision before filing.`,
-    ready: v.overridden
-      ? `Ready to file. Every flag was reviewed; ${v.overridden} ${v.overridden === 1 ? "was" : "were"} overridden by a reviewer, with the reasons listed above.`
-      : "Ready to file. Every check passed on these documents.",
-  }[v.verdict];
   const issues = flags().map((c) => {
-    const rv = reviews[c.id];
-    return `<div class="i ${c.status}"><h3>${STATUS_LABEL[c.status]} · ${esc(c.title)}</h3><p>${esc(c.message)}</p>
-      ${c.suggestion ? `<p><b>Suggested fix:</b> ${esc(c.suggestion)}</p>` : ""}
+    const message = ml && mlMessage(c)
+      ? `<p class="ml-msg">${esc(mlMessage(c))}</p><p class="m">${esc(c.message)}</p>`
+      : `<p>${esc(c.message)}</p>`;
+    return `<div class="i ${c.status}"><h3>${T.sev[c.status]} · ${esc(c.title)}</h3>${message}
+      ${c.suggestion ? `<p><b>${T.fix}:</b> ${esc(c.suggestion)}</p>` : ""}
       ${(c.values || []).length ? `<table>${c.values.map((x) => `<tr${x.outlier ? ' class="o"' : ""}><td>${esc(x.doc_name)}</td><td>${esc(x.display ?? x.raw ?? "—")}</td></tr>`).join("")}</table>` : ""}
-      <p class="rv">${rv ? `Review: ${rv.decision === "confirmed" ? "confirmed" : "overridden"} by ${esc(rv.reviewer)} at ${esc(rv.at.replace("T", " "))}${rv.note ? `, note: “${esc(rv.note)}”` : ""}` : "Review: pending"}</p></div>`;
-  }).join("") || "<p>No issues found.</p>";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>TallyTime review report</title><style>
-    body{font:12px/1.45 "IBM Plex Sans",Arial,sans-serif;color:#0B1F33;margin:28px}
-    h1{font-size:22px;margin:0} h2{font-size:15px;border-bottom:2px solid #0B1F33;padding-bottom:3px;margin-top:20px}
-    h3{font-size:13px;margin:0 0 4px} .stamp{display:inline-block;border:3px solid #C41E33;color:#C41E33;font:700 16px monospace;letter-spacing:2px;padding:4px 10px;transform:rotate(-2deg);margin:8px 0}
-    .stamp.ready{border-color:#1F7A50;color:#1F7A50} .stamp.review{border-color:#A8540A;color:#A8540A}
-    .i{border-left:4px solid #C41E33;padding:6px 10px;margin:8px 0;page-break-inside:avoid} .i.warning{border-color:#A8540A}
-    table{border-collapse:collapse;margin:4px 0} td{border:1px solid #ccc;padding:2px 6px;font-family:monospace} tr.o td{background:#FBE3E6;color:#C41E33}
-    .rv{color:#555} .m{color:#555} li{margin:2px 0} .final{font-size:14px;font-weight:700}</style></head><body>
-    <h1>TallyTime · Export document review</h1>
-    <p class="m">Generated ${new Date().toLocaleString()} · Shipment ${esc(current.id)}</p>
+      <p class="rv">${T.review(reviews[c.id])}</p></div>`;
+  }).join("") || `<p>${T.noIssues}</p>`;
+  const css = (t) => `"${String(t).replace(/["\\]/g, "\\$&").replace(/\n/g, " ")}"`;   // a CSS string literal
+  const font = `${ml ? '"Noto Sans Malayalam","Manjari",' : ""}-apple-system,"Segoe UI",Roboto,Arial,sans-serif`;
+  const generatedAt = new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  const box = `font: 9px/1.4 ${font}; color: #54595d; padding: 0 0 6px;`;
+  const html = `<!doctype html><html lang="${ml ? "ml" : "en"}"><head><meta charset="utf-8"><title>TallyTime review report${ml ? " (Malayalam)" : ""}</title><style>
+    @page { size: A4; margin: 22mm 16mm 20mm;
+      @top-left { content: ${css(T.runHead)}; ${box} font-weight: 700; color: #3366cc; border-bottom: 1px solid #c8ccd1; vertical-align: bottom; }
+      @top-right { content: ${css(current.label || current.id)}; ${box} border-bottom: 1px solid #c8ccd1; vertical-align: bottom; }
+      @bottom-left { content: ${css(T.generated + " " + generatedAt + " · " + T.runFoot)}; ${box} padding: 6px 0 0; border-top: 1px solid #c8ccd1; vertical-align: top; }
+      @bottom-right { content: ${css(T.page[0])} counter(page) ${css(T.page[1])} counter(pages); ${box} padding: 6px 0 0; border-top: 1px solid #c8ccd1; vertical-align: top; }
+    }
+    body{font:12px/1.55 ${font};color:#202122;margin:0}
+    h1{font-size:22px;margin:0} h2{font-size:15px;border-bottom:2px solid #202122;padding-bottom:3px;margin-top:20px}
+    h3{font-size:13px;margin:0 0 4px} .stamp{display:inline-block;border:2px solid #d73333;color:#d73333;font-weight:700;font-size:15px;letter-spacing:1px;padding:4px 10px;margin:8px 0}
+    .stamp.ready{border-color:#14866d;color:#14866d} .stamp.review{border-color:#ab7f2a;color:#886425}
+    .i{border-left:4px solid #d73333;padding:6px 10px;margin:8px 0;page-break-inside:avoid} .i.warning{border-color:#ab7f2a}
+    table{border-collapse:collapse;margin:4px 0} td{border:1px solid #c8ccd1;padding:2px 6px;font-family:monospace} tr.o td{background:#fee7e6;color:#d73333}
+    .rv{color:#54595d} .m{color:#54595d} li{margin:2px 0} .final{font-size:14px;font-weight:700} .ml-msg{font-size:13px}</style></head><body>
+    <h1>${T.title}</h1>
+    <p class="m">${T.generated} ${new Date().toLocaleString()} · ${T.shipment} ${esc(current.label || current.id)}</p>
     <div class="stamp ${v.verdict}">${stamp}</div>
-    <p>${r.counts.errors} errors · ${r.counts.warnings} warnings · ${r.counts.passed}/${r.counts.evaluated} checks passed · ${v.reviewed}/${v.total} flags reviewed</p>
-    <h2>Documents</h2><ul>${r.documents.map((d) => `<li>${esc(d.doc_name)}: ${esc(d.filename)}${d.ocr_used ? " (scanned, OCR)" : ""}</li>`).join("")}</ul>
-    <h2>Issues</h2>${issues}
-    <h2>Checks passed (${passed.length} of ${r.counts.evaluated})</h2>
-    ${passed.length ? `<ul>${passed.map((c) => `<li>${esc(c.title)}: ${esc(c.message)}</li>`).join("")}</ul>` : "<p>None of the checks passed.</p>"}
-    <h2>Final verdict</h2>
+    <p>${T.summary(r, v)}</p>
+    <h2>${T.documents}</h2><ul>${r.documents.map((d) => `<li>${esc(d.doc_name)}: ${esc(d.filename)}${d.ocr_used ? ` (${T.scanned})` : ""}</li>`).join("")}</ul>
+    <h2>${T.issues}</h2>${issues}
+    <h2>${T.passed(passed.length, r.counts.evaluated)}</h2>
+    ${passed.length ? `<ul>${passed.map((c) => `<li>${esc(c.title)}: ${esc(c.message)}</li>`).join("")}</ul>` : `<p>${T.nonePassed}</p>`}
+    <h2>${T.finalTitle}</h2>
     <div class="stamp ${v.verdict}">${stamp}</div>
-    <p class="final">${esc(conclusion)}</p>
-    <p>${r.counts.errors} ${r.counts.errors === 1 ? "error" : "errors"} and ${r.counts.warnings} ${r.counts.warnings === 1 ? "warning" : "warnings"} found · ${confirmed} confirmed · ${v.overridden} overridden · ${v.total - v.reviewed} not yet reviewed.</p>
-    <p class="m" style="margin-top:20px">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call. Values were extracted by an AI model and checked by deterministic rules; each value's source text is shown in the app.</p>
+    <p class="final">${esc(T.conclusion(v))}</p>
+    <p>${T.tally(r, v, confirmed)}</p>
+    <p class="m" style="margin-top:20px">${T.disclaimer}</p>
     <script>window.onload=()=>window.print()<\/script></body></html>`;
   const w = window.open("", "_blank");
   w.document.write(html);
@@ -544,7 +601,7 @@ function renderReadiness() {
 }
 
 /* ---------- dashboard ---------- */
-const VERDICT_TEXT = { blocked: "BLOCKED", review: "REVIEW", ready: "READY" };
+const VERDICT_TEXT = { blocked: "FIX FIRST", review: "REVIEW", ready: "READY" };
 
 function bars(items, hot) {
   const max = Math.max(1, ...items.map((i) => i.count));
@@ -566,7 +623,7 @@ async function loadDashboard() {
       <div class="kpi"><b>${d.shipments}</b><span>shipments checked</span></div>
       <div class="kpi"><b>${d.documents}</b><span>documents read</span></div>
       <div class="kpi"><b>${d.flags}</b><span>issues caught before filing</span></div>
-      <div class="kpi blocked"><b>${d.verdicts.blocked}</b><span>blocked</span></div>
+      <div class="kpi blocked"><b>${d.verdicts.blocked}</b><span>fix before filing</span></div>
       <div class="kpi review"><b>${d.verdicts.review}</b><span>needed review</span></div>
       <div class="kpi ready"><b>${d.verdicts.ready}</b><span>ready to file</span></div>
     </div>
@@ -624,6 +681,11 @@ function init() {
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") closeDrawer(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
   loadModelInfo();
+  const dlg = $("#report-dialog");
+  $$("[data-report-lang]").forEach((b) => b.onclick = () => { dlg.hidden = true; printReport(b.dataset.reportLang); });
+  $("#report-cancel").onclick = () => { dlg.hidden = true; };
+  dlg.onclick = (e) => { if (e.target === dlg) dlg.hidden = true; };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") dlg.hidden = true; });
   $("#home-link").onclick = goHome;
   $("#nav-new").onclick = goHome;
   $("#nav-dashboard").onclick = openDashboard;

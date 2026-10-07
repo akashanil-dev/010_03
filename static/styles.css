@@ -476,3 +476,11 @@ h1, h2 { font-weight: 700; }
 .reviewer select:hover { border-color: var(--cdx-placeholder); }
 .reviewer select:focus { outline: none; border-color: var(--cdx-progressive); box-shadow: inset 0 0 0 1px var(--cdx-progressive); }
 .reviewer select option { background: var(--cdx-bg); color: var(--cdx-base); font-weight: 400; }
+
+/* Report language dialog (cdx-dialog style) */
+.dialog-backdrop { position: fixed; inset: 0; background: rgba(32, 33, 34, 0.45); display: flex; align-items: center; justify-content: center; z-index: 30; padding: 16px; }
+.dialog { background: var(--cdx-bg); border: 1px solid var(--cdx-border); border-radius: var(--cdx-radius); box-shadow: 0 4px 16px rgba(0,0,0,.25); padding: 24px; width: min(440px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.dialog h2 { font-family: var(--sans); font-size: 20px; margin: 0; }
+.dialog-choices { display: flex; gap: 10px; }
+.dialog-choices .btn { flex: 1; padding: 12px; font-size: 16px; }
+.dialog #report-cancel { align-self: flex-end; }

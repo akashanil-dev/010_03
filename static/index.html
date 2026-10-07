@@ -113,6 +113,18 @@
   </section>
 </main>
 
+<div id="report-dialog" class="dialog-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="report-dialog-title">
+  <div class="dialog">
+    <h2 id="report-dialog-title">Export the review report</h2>
+    <p class="muted">Which language should the report be in? It opens the print dialog; choose "Save as PDF" to keep it.</p>
+    <div class="dialog-choices">
+      <button class="btn primary" data-report-lang="en">English</button>
+      <button class="btn primary ml" data-report-lang="ml">മലയാളം</button>
+    </div>
+    <button class="btn ghost" id="report-cancel">Cancel</button>
+  </div>
+</div>
+
 <aside id="drawer" class="drawer" hidden>
   <div class="drawer-inner">
     <button id="drawer-close" class="btn ghost close" aria-label="Close">Close</button>

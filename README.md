@@ -19,8 +19,8 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **Money and deadlines:** flags a shipping bill that claims no RoDTEP or drawback (the claim must be made on the shipping bill), and shows the 3-month amendment window and the 15-month export-proceeds deadline.
 - **New rules for Kerala products:** EUDR due diligence for natural rubber to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
 - **Send fixes to the right team:** issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker, documentation) with one-tap **WhatsApp**, email or copy.
-- **Malayalam:** issue text and fix messages can be switched to Malayalam for warehouse and floor staff.
-- **Summary dashboard:** shipments checked, ready / review / blocked, the most common issues, and **which document and team causes the most errors**. History is stored in SQLite.
+- **Malayalam:** issue text, fix messages and the exported report can be in Malayalam for warehouse and floor staff (the original English stays alongside each issue).
+- **Summary dashboard:** shipments checked, ready / needs review / fix before filing, the most common issues, and **which document and team causes the most errors**. History is stored in SQLite.
 - **Review team and final verdict:** add the reviewers' names once and pick them from a dropdown on each issue (or switch names off). Overrides need a reason; the final verdict after review is shown on the shipment, the dashboard and the report.
 - **Upload safety:** at most 12 files, 10 MB each and 25 pages per PDF; each file's real content is checked against its extension. Unrelated files, duplicates and documents TallyTime does not check yet (such as a bill of lading) are flagged, and unrelated files never reach the AI model.
 - **Printable review report** ending with the final verdict, an **export bar under every results tab**, and **delete uploaded files** for each shipment.
@@ -107,12 +107,12 @@ The home page has a **Try a demo shipment** panel on the right. Each button load
 
 | Button | What it shows | Expected result |
 |---|---|---|
-| **With planted errors** | Six PDFs with 8 hidden problems | BLOCKED: 8 errors, 1 warning |
+| **With planted errors** | Six PDFs with 8 hidden problems | FIX BEFORE FILING: 8 errors, 1 warning |
 | **Errors + scanned packing list** | Same, but the packing list is an image-only scan | Same result, read with OCR |
 | **All 6 documents in one PDF** | One merged file holding the whole set | Split into six documents automatically; same result |
 | **Mixed formats** | Excel invoice, phone-photo packing list, PDFs | Same result |
-| **Clean set + letter of credit** | Documents that agree with each other, plus an LC they break | BLOCKED by 2 LC issues: late shipment, different size |
-| **Lab certificate with a failed test** | A quality certificate reporting a banned antibiotic | BLOCKED, including "Banned antibiotic residue detected" |
+| **Clean set + letter of credit** | Documents that agree with each other, plus an LC they break | FIX BEFORE FILING, from 2 LC issues: late shipment, different size |
+| **Lab certificate with a failed test** | A quality certificate reporting a banned antibiotic | FIX BEFORE FILING, including "Banned antibiotic residue detected" |
 | **Clean shipment** | Everything consistent | READY TO FILE: no issues |
 
 A demo that has run once before loads instantly from the cache. Reading a set for the very first time takes about a minute per document on a laptop CPU.
@@ -143,7 +143,7 @@ The upload page lists which documents are **required** (commercial invoice, pack
 
 **The verdict banner** (top) gives the overall answer:
 
-- **BLOCKED**: errors that customs or the buyer's bank would likely query. Fix them before filing.
+- **FIX BEFORE FILING**: errors that customs or the buyer's bank would likely query. Fix them (or override them with a reason) before filing.
 - **NEEDS REVIEW**: no errors, but warnings a person should decide on.
 - **READY TO FILE**: every check passed (or every flag was reviewed and overridden).
 
@@ -186,7 +186,7 @@ The results are organised in tabs:
 
 ### E. Report, delete and start again
 
-- **Print / save report** (or **Export report (PDF)** under any tab) opens a report with the verdict, documents, every issue with its review decision, the checks passed and, at the end, the **final verdict** with what is still open. Choose **Save as PDF** in the print dialog. For a clean PDF, untick **Headers and footers** under *More settings* (otherwise the browser prints "about:blank" at the bottom).
+- **Print / save report** (or **Export report (PDF)** under any tab) first asks for the report language (**English** or **മലയാളം**), then opens a report with the verdict, documents, every issue with its review decision, the checks passed and, at the end, the **final verdict** with what is still open. Choose **Save as PDF** in the print dialog. Every page carries a TallyTime header with the shipment, and a footer with the date and "Page N of M"; these replace the browser's own URL and date line.
 - **Delete uploaded files** permanently removes this shipment's files and results from the machine.
 - **New shipment** returns to the upload page.
 
@@ -194,7 +194,7 @@ The results are organised in tabs:
 
 The dashboard is on the home page, below the upload area; **Dashboard** in the top bar scrolls to it. It shows every shipment checked:
 
-- totals: shipments, documents read, issues caught, and how many were blocked, needed review or were ready;
+- totals: shipments, documents read, issues caught, and how many must be fixed before filing, needed review or were ready;
 - **Which document is wrong most often**, with the team that prepares it;
 - **Most common issues**;
 - **Recent shipments**, with the verdict after review: click a row to reopen its results.
@@ -254,7 +254,7 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | "This check was interrupted by a server restart" | TallyTime was restarted while reading. Upload the documents again. |
 | "… could not be read: the AI model is not running or not reachable" | Start Ollama (`ollama serve &`) and run the check again. The other documents were still checked, but the result is incomplete. |
 | "Add reviewer names in the Review team panel above" | Add at least one name at the top of the Issues tab, or untick **Record who made each decision**. |
-| The saved PDF shows "about:blank" | Untick **Headers and footers** in the print dialog's *More settings*. |
+| The saved PDF shows a URL or "about:blank" | Your browser does not support custom print headers (older than Chrome / Edge 131). Untick **Headers and footers** in the print dialog's *More settings*. |
 | The page looks unchanged after an update | Press `Ctrl+Shift+R` to reload without the browser cache. |
 
 ---
@@ -346,7 +346,7 @@ The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six docu
 | Set | Result |
 |---|---|
 | Clean | Ready. 0 false flags (25 of 25 evaluated checks pass) |
-| Errors | Blocked. **8 of 8** planted issues caught (7 errors + 1 warning), plus the packing-list arithmetic error that follows from the wrong carton count. The 3 format traps are not flagged. |
+| Errors | Fix before filing. **8 of 8** planted issues caught (7 errors + 1 warning), plus the packing-list arithmetic error that follows from the wrong carton count. The 3 format traps are not flagged. |
 | Errors + scanned packing list | Same result as the errors set; OCR read the scan correctly |
 | Mixed formats (Excel invoice, phone-photo packing list tilted 3.5°, PDFs) | Same result: **8 of 8** caught. Without automatic straightening the tilted photo lost the carton error; with it every field was read correctly. |
 | All six documents in one merged PDF | Split into the six documents by page titles; same result |
