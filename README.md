@@ -2,11 +2,11 @@
 
 **KeralAI Grand Challenge 2026 · Team 10 · Challenge 3: Export Document Verification System**
 
-TallyTime reads the documents of an export shipment (purchase order, commercial invoice, packing list, shipping bill, health certificate, certificate of origin), compares every shared fact across them and flags discrepancies **before** the shipment reaches customs or the buyer's bank. Every flag shows the exact source text it is based on, and a person confirms or overrides it.
+TallyTime reads the documents of an export shipment (purchase order, commercial invoice, packing list, shipping bill, quality / health certificate, certificate of origin and, optionally, the letter of credit), compares every shared fact across them and flags discrepancies **before** the shipment reaches customs or the buyer's bank. Every flag shows the exact source text it is based on, and a person confirms or overrides it.
 
 > **AI reads, rules judge.** An AI model (IBM Granite, running locally) only *extracts* values. Every pass/fail decision comes from deterministic, inspectable rules.
 
-**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use TallyTime, step by step](#how-to-use-tally-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
+**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use TallyTime, step by step](#how-to-use-tallytime-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Configuration](#configuration) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
 
 ## Features
 
@@ -21,14 +21,19 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **Send fixes to the right team:** issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker, documentation) with one-tap **WhatsApp**, email or copy.
 - **Malayalam:** issue text and fix messages can be switched to Malayalam for warehouse and floor staff.
 - **Summary dashboard:** shipments checked, ready / review / blocked, the most common issues, and **which document and team causes the most errors**. History is stored in SQLite.
-- **Printable review report** and **delete uploaded files** for each shipment.
+- **Review team and final verdict:** add the reviewers' names once and pick them from a dropdown on each issue (or switch names off). Overrides need a reason; the final verdict after review is shown on the shipment, the dashboard and the report.
+- **Upload safety:** at most 12 files, 10 MB each and 25 pages per PDF; each file's real content is checked against its extension. Unrelated files, duplicates and documents TallyTime does not check yet (such as a bill of lading) are flagged, and unrelated files never reach the AI model.
+- **Printable review report** ending with the final verdict, an **export bar under every results tab**, and **delete uploaded files** for each shipment.
 - **REST API** with interactive documentation at `/docs`, so an ERP or a customs broker's system could submit documents directly.
+- **Interface** styled after the Wikimedia Codex design language, with the AI model in use named in the header.
 
 ---
 
 ## Quick start
 
 Tested on Linux (Arch) with Python 3.12, CPU only. A GPU is not needed.
+
+**You need:** about 8 GB of free RAM, about 6 GB of disk for the Python packages and models, and an internet connection for the one-time setup. After setup, TallyTime runs fully offline.
 
 ### 1. Install the prerequisites
 
@@ -130,7 +135,9 @@ A demo that has run once before loads instantly from the cache. Reading a set fo
 - A file that is **not an export document** (no recognised title) is flagged with a warning and skipped. It is never sent to the AI model, so it costs almost no time.
 - If the **same type is uploaded twice** (for example an old and a new invoice), only the first is compared and a warning names both files.
 
-TallyTime recognises a document by its title: purchase order, commercial invoice, packing list, shipping bill, quality / health / inspection certificate, certificate of origin, and letter of credit. A file it cannot recognise is listed as *Unrecognised* and left out of the comparison.
+TallyTime recognises a document by its title: purchase order, commercial invoice, packing list, shipping bill, quality / health / inspection / analysis / phytosanitary certificate, certificate of origin, and letter of credit. A bill of lading, insurance or fumigation certificate is named as "not checked yet"; any other file is listed as *Unrecognised*. Neither is compared.
+
+The upload page lists which documents are **required** (commercial invoice, packing list, shipping bill), **recommended** (purchase order, quality / health certificate, certificate of origin) and **optional** (letter of credit).
 
 ### D. Reading the results
 
@@ -140,7 +147,9 @@ TallyTime recognises a document by its title: purchase order, commercial invoice
 - **NEEDS REVIEW**: no errors, but warnings a person should decide on.
 - **READY TO FILE**: every check passed (or every flag was reviewed and overridden).
 
-Below it: number of errors and warnings, checks passed, flags reviewed and documents read. On the right are three buttons: **Print / save report**, **New shipment** and **Delete uploaded files**.
+Below it: number of errors and warnings (with how many were overridden), checks passed, flags reviewed and documents read, then a **document checklist** (✓ uploaded, ✗ missing). On the right are three buttons: **Print / save report**, **New shipment** and **Delete uploaded files**. Every results tab also ends with an **Export report (PDF)** bar.
+
+The badge at the top right names the AI model reading the documents, for example *IBM Granite 4.0 Micro (3B) · on this machine*.
 
 **Issue language**: the **English / മലയാളം** switch above the tabs changes the issue text and the fix messages to Malayalam.
 
@@ -148,7 +157,9 @@ The results are organised in tabs:
 
 1. **Truth matrix**: one row per field (cartons, weights, HS code, ports, …), one column per document, ordered by the document hierarchy (purchase order first).
    - A **red cell marked "Likely wrong"** is the value that disagrees with the others.
+   - An **amber cell marked "Too vague"** is a warning, for example a goods description with too few details.
    - "Not found in source" means the value could not be found word for word in the document; check it by hand.
+   - *not stated* means that document does not show that field. This is often normal: a packing list rarely carries an HS code.
    - **Click any value** to open a side panel showing the value as printed, how it was compared, the exact text it was read from (highlighted), and a link to open the original file. Press `Esc` or **Close** to close it.
 2. **Issues**: one card per error (red) or warning (amber). Each card shows:
    - what is wrong, in plain English, and a **suggested fix**;
@@ -171,22 +182,22 @@ The results are organised in tabs:
    - **DATE**: key deadlines (shipping-bill amendment window, export-proceeds deadline).
 5. **All checks**: every check TallyTime ran, grouped as *Across documents*, *Within a document*, *Compliance*, *Letter of credit* and *Lab results*, with PASS / ERROR / WARNING / SKIPPED. SKIPPED means a value needed for the check was not on the documents.
 6. **Documents**: one card per document: type, how it was read, time taken, number of fields, any values to check by hand, the full list of extracted fields (click **Extracted fields**), and **Open original file**.
-7. **Audit log**: every confirm and override, with the note and time.
+7. **Audit log**: every confirm and override, with the reviewer, the note and the time.
 
 ### E. Report, delete and start again
 
-- **Print / save report** opens a one-page report (verdict, documents, every issue with its review decision, checks passed) and the print dialog. Choose **Save as PDF** to keep or send it.
+- **Print / save report** (or **Export report (PDF)** under any tab) opens a report with the verdict, documents, every issue with its review decision, the checks passed and, at the end, the **final verdict** with what is still open. Choose **Save as PDF** in the print dialog. For a clean PDF, untick **Headers and footers** under *More settings* (otherwise the browser prints "about:blank" at the bottom).
 - **Delete uploaded files** permanently removes this shipment's files and results from the machine.
 - **New shipment** returns to the upload page.
 
 ### F. Dashboard
 
-Click **Dashboard** in the top bar to see every shipment checked:
+The dashboard is on the home page, below the upload area; **Dashboard** in the top bar scrolls to it. It shows every shipment checked:
 
 - totals: shipments, documents read, issues caught, and how many were blocked, needed review or were ready;
 - **Which document is wrong most often**, with the team that prepares it;
 - **Most common issues**;
-- **Recent shipments**: click a row to reopen its results.
+- **Recent shipments**, with the verdict after review: click a row to reopen its results.
 
 History is stored in `data/tally.db` and survives restarts. Delete that file to start with an empty dashboard.
 
@@ -204,10 +215,16 @@ curl http://localhost:8000/api/shipments/<id>
 
 # 3. Record a review decision
 curl -X POST http://localhost:8000/api/shipments/<id>/reviews -H "Content-Type: application/json" \
-     -d '{"check_id": "cross:cartons", "decision": "confirmed", "note": "Recounting"}'
+     -d '{"check_id": "cross:cartons", "decision": "confirmed", "note": "Recounting", "reviewer": "Anjali, Accounts"}'
 
 # 4. Dashboard statistics
 curl http://localhost:8000/api/dashboard
+
+# 5. Which AI model is reading the documents
+curl http://localhost:8000/api/info
+
+# 6. Delete a shipment and its uploaded files
+curl -X DELETE http://localhost:8000/api/shipments/<id>
 ```
 
 ### H. Regenerating the demo documents
@@ -235,6 +252,10 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | A value is marked "check by hand" | It was not found word for word in the document (often OCR on a poor photo). Open the file from the side panel and compare. |
 | The first document is very slow | Normal: models load on first use. Later documents are faster, and repeated documents are instant. |
 | "This check was interrupted by a server restart" | TallyTime was restarted while reading. Upload the documents again. |
+| "… could not be read: the AI model is not running or not reachable" | Start Ollama (`ollama serve &`) and run the check again. The other documents were still checked, but the result is incomplete. |
+| "Add reviewer names in the Review team panel above" | Add at least one name at the top of the Issues tab, or untick **Record who made each decision**. |
+| The saved PDF shows "about:blank" | Untick **Headers and footers** in the print dialog's *More settings*. |
+| The page looks unchanged after an update | Press `Ctrl+Shift+R` to reload without the browser cache. |
 
 ---
 
@@ -247,12 +268,13 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | **Compliance** | required documents present; LUT ARN on the invoice when the shipping bill declares export under LUT; date order (PO ≤ invoice ≤ shipping bill, invoice ≤ certificate of origin) |
 | **Letter of credit** | amount and tolerance, currency, latest shipment date, presentation deadline and expiry, ports, Incoterms, invoice description, beneficiary and applicant, required documents |
 | **Lab results** | banned antibiotics detected, ethylene oxide above the EU limit |
+| **Intake** | unrecognised files, duplicate document types, known documents not checked yet, files that could not be read |
 
-Format differences are **normalised first, not flagged**: `12.000 MTS` = `12,000 kg`, `1200 CTNS` = `1,200 cartons`, `Pvt. Ltd.` = `Private Limited`, `0306.17.20` = `03061720`.
+Format differences are **normalised first, not flagged**: `12.000 MTS` = `12,000 kg`, `26,455 LBS` in kg, `1200 CTNS` = `1,200 cartons`, `Pvt. Ltd.` = `Private Limited`, `0306.17.20` = `03061720` (a 4- or 6-digit code on a certificate matches its 8-digit code), `12.000,50` (European style) = `12,000.50`, `US$` = `USD`. A label copied instead of a value (such as "Buyer") counts as not stated. When a document's invoice and PO numbers are swapped, TallyTime says so instead of reporting two mismatches.
 
 ### The document hierarchy
 
-When documents disagree, TallyTime names the **likely outlier** using a majority vote, with ties broken by the document hierarchy:
+When documents disagree, TallyTime names the **likely outlier** using a majority vote. On a tie, a value found word for word in its document beats one that was not, and then the document hierarchy decides:
 
 ```
 Purchase order  →  Commercial invoice  →  Packing list  →  Shipping bill / certificates
@@ -288,15 +310,32 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/store.py` | SQLite history and dashboard statistics |
 | `app/uploads.py` | Upload limits and file-content validation |
 | `app/extract.py` | LLM field extraction and source-text verification |
-| `app/llm.py` | Provider switch: local Ollama (default) or IBM watsonx |
+| `app/llm.py` | Provider switch: local Ollama (default) or IBM watsonx; names the model for the header badge |
 | `app/normalize.py` | Deterministic normalisers |
 | `app/rules.py` | Rule engine and document hierarchy |
-| `app/report.py` | Verdict and Truth Matrix |
+| `app/report.py` | Verdict, final verdict after review, Truth Matrix, document checklist |
 | `app/pipeline.py` | Per-file pipeline; caches by file hash and by document text |
 | `app/main.py` | FastAPI backend |
-| `static/` | Web interface (plain HTML, CSS, JavaScript); `ml.js` holds the Malayalam wording |
+| `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `ml.js` holds the Malayalam wording |
 | `tools/make_demo_docs.py` | Generates the synthetic demo shipment |
-| `tests/` | Rule engine tests on recorded model output |
+| `tests/` | 17 tests on recorded model output: rules, normalisation, LC, lab results, uploads, final verdict |
+| `data/demo/` | The synthetic demo shipments (seven sets) |
+| `data/cache/`, `data/uploads/`, `data/tally.db` | Created at run time: reading cache, uploaded files and shipment history. Not in the repository. |
+
+---
+
+## Configuration
+
+Settings live in `.env` (copy it from `.env.example`). The defaults need no changes.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` to read documents on this machine, or `watsonx` to use IBM watsonx in the cloud |
+| `OLLAMA_HOST` | `http://localhost:11434` | Where Ollama is running |
+| `OLLAMA_MODEL` | `granite4:micro` | The local model. All measurements in this README use `granite4:micro`; other Ollama models can be set here but were not tested. |
+| `WATSONX_API_KEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL`, `WATSONX_MODEL` | (placeholders) | Only used when `LLM_PROVIDER=watsonx`. Document text is then sent to IBM's cloud, and the header badge says so. |
+
+Restart TallyTime after changing `.env`.
 
 ---
 
@@ -311,6 +350,10 @@ The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six docu
 | Errors + scanned packing list | Same result as the errors set; OCR read the scan correctly |
 | Mixed formats (Excel invoice, phone-photo packing list tilted 3.5°, PDFs) | Same result: **8 of 8** caught. Without automatic straightening the tilted photo lost the carton error; with it every field was read correctly. |
 | All six documents in one merged PDF | Split into the six documents by page titles; same result |
+| Clean set + letter of credit | Documents agree with each other, yet **both planted LC breaches are caught**: shipment after the LC's latest date, and size 26/30 in the LC vs 31/40 on the invoice |
+| Lab certificate reporting a nitrofuran | Errors-set issues plus **"Banned antibiotic residue detected"**; the "not detected" chloramphenicol line correctly passes |
+| Fresh install | A clean clone following this README caught the same 8 of 8 with no cache |
+| Automated tests | `pytest -q`: 17 passed |
 | Extraction time | 35–109 s per new document (mean 73 s) on CPU. Documents seen before load instantly from the cache. |
 
 These are synthetic documents written by the team, so this shows the pipeline works. It is **not** a measure of real-world accuracy.
@@ -323,9 +366,10 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 
 - **Evidence for every flag.** Each value shows the document text it came from; values not found word for word are marked "check by hand".
 - **AI reads, rules judge.** The model never decides pass or fail. Rules are plain Python in `app/rules.py`.
-- **Human in the loop.** Every flag can be confirmed or overridden. An override requires a note, and every decision is logged with a time.
+- **Human in the loop.** Every flag can be confirmed or overridden. An override requires a note, and every decision is logged with the reviewer's name (unless names are switched off) and the time. The report and dashboard show the verdict after review, never hiding what was overridden.
 - **Local by default.** Documents are parsed and read on the machine running TallyTime. Nothing is sent to an external service unless `LLM_PROVIDER=watsonx` is set.
 - **Data minimisation.** Email addresses and phone numbers are masked before text is stored or sent to the model (in the spirit of India's DPDP Act 2023). Uploaded files can be deleted from the results screen.
+- **Safe uploads.** File size, count and page limits; each file's content is checked against its type; file names are cleaned, and only the shipment's own files can be opened.
 - **Not legal advice.** TallyTime is decision support; a licensed customs broker makes the final call.
 
 ## Limitations
@@ -337,5 +381,7 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 - An Excel workbook with several documents on different sheets is read as one document.
 - Extraction takes about a minute per document on a laptop CPU; a GPU or IBM watsonx would cut this to seconds.
 - Single process with SQLite; a production deployment would add user accounts, Postgres and a job queue with several workers.
+- No user accounts: anyone who can open TallyTime can see every shipment, and reviewer names are remembered per browser.
+- Dates like `03/04/2026` are read the Indian way (3 April). An invoice with several product lines is checked on its totals, not line by line. In a merged PDF, a page without a title is treated as part of the document before it.
 
 See [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for third-party software, models and AI assistance.
