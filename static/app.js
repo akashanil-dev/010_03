@@ -426,7 +426,7 @@ function renderReadiness() {
   const r = current.report.readiness;
   if (!r) { $("#tab-readiness").innerHTML = ""; return; }
   const groups = [...new Set(r.items.map((i) => i.group))];
-  const label = { ok: "OK", missing: "MISSING", check: "CHECK" };
+  const label = { ok: "OK", missing: "MISSING", check: "CHECK", info: "DATE" };
   $("#tab-readiness").innerHTML = `
     <div class="ready-head">
       <div><span class="muted">Product</span><br><b>${esc(r.product_name)}</b> <span class="muted">· from ${esc(r.product_basis)}</span></div>
