@@ -1,1 +1,92 @@
-<!doctype html><title>Tally</title><p>UI coming</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tally · Export Document Verification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" role="button" tabindex="0" id="home-link">
+    <span class="logo">Tally</span>
+    <span class="tagline">Export document verification</span>
+  </div>
+  <div class="privacy-badge" title="Documents are read by an AI model running on this computer. Nothing is sent to an external service.">
+    <span class="dot"></span> Local AI · documents stay on this machine
+  </div>
+</header>
+
+<main id="app">
+  <!-- Upload -->
+  <section id="view-upload" class="view">
+    <div class="hero">
+      <p class="eyebrow">STEP 1 · UPLOAD THE SHIPMENT</p>
+      <h1>Catch document mismatches before customs does.</h1>
+      <p class="lead">Upload the shipment's PDFs. Tally reads every document, compares each fact across them and tells you exactly what to fix, with the evidence.</p>
+    </div>
+
+    <div class="upload-grid">
+      <div class="card">
+        <label id="dropzone" class="dropzone" for="file-input">
+          <input id="file-input" type="file" accept="application/pdf" multiple hidden>
+          <strong>Drop PDFs here</strong>
+          <span>or click to choose files. Scans and phone photos saved as PDF are fine.</span>
+        </label>
+        <ul id="file-list" class="file-list"></ul>
+        <div class="row-actions">
+          <button id="btn-check" class="btn primary" disabled>Check documents</button>
+          <button id="btn-clear" class="btn ghost" hidden>Clear</button>
+        </div>
+        <p class="hint">Recognised: purchase order, commercial invoice, packing list, shipping bill, health certificate, certificate of origin.</p>
+      </div>
+
+      <div class="card demo-card">
+        <p class="eyebrow">TRY A DEMO SHIPMENT</p>
+        <p class="muted">A synthetic Kochi shrimp export to Rotterdam: six documents, fictitious companies.</p>
+        <button class="btn demo" data-demo="errors"><b>With planted errors</b><span>8 issues hidden across 6 documents</span></button>
+        <button class="btn demo" data-demo="scanned"><b>Errors + scanned packing list</b><span>One document is an image-only scan</span></button>
+        <button class="btn demo" data-demo="clean"><b>Clean shipment</b><span>Everything should match</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Processing -->
+  <section id="view-processing" class="view" hidden>
+    <p class="eyebrow">STEP 2 · READING DOCUMENTS</p>
+    <h2>Reading each document and extracting every field</h2>
+    <p class="muted">The model runs on this laptop's CPU, so a new document takes about a minute. Documents seen before load instantly.</p>
+    <ol id="progress-list" class="progress-list"></ol>
+  </section>
+
+  <!-- Results -->
+  <section id="view-results" class="view" hidden>
+    <div id="verdict" class="verdict"></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="matrix">Truth matrix</button>
+      <button class="tab" data-tab="issues">Issues <span id="issues-count" class="pill"></span></button>
+      <button class="tab" data-tab="checklist">Checklist</button>
+      <button class="tab" data-tab="documents">Documents</button>
+      <button class="tab" data-tab="audit">Audit log <span id="audit-count" class="pill"></span></button>
+    </nav>
+    <div id="tab-matrix" class="tab-panel"></div>
+    <div id="tab-issues" class="tab-panel" hidden></div>
+    <div id="tab-checklist" class="tab-panel" hidden></div>
+    <div id="tab-documents" class="tab-panel" hidden></div>
+    <div id="tab-audit" class="tab-panel" hidden></div>
+  </section>
+</main>
+
+<aside id="drawer" class="drawer" hidden>
+  <div class="drawer-inner">
+    <button id="drawer-close" class="btn ghost close" aria-label="Close">Close</button>
+    <div id="drawer-body"></div>
+  </div>
+</aside>
+
+<footer class="foot">Tally is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
+<script src="app.js"></script>
+</body>
+</html>
