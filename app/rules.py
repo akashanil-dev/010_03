@@ -144,8 +144,11 @@ def cross_document(docs: list[ParsedDocument]) -> list[Check]:
                                 message=f"{label} agrees on {len(entries)} documents."))
             continue
 
-        # Reference = biggest group; ties go to the group holding the highest-ranked document.
-        groups.sort(key=lambda g: (-len(g), min(HIERARCHY[d.doc_type] for d, _ in g)))
+        # Reference = biggest group; on a tie, values verified in the source text beat unverified ones,
+        # then the group holding the highest-ranked document wins.
+        def verified(g):
+            return sum(_value(d, key, None).verified for d, _ in g)
+        groups.sort(key=lambda g: (-len(g), -verified(g), min(HIERARCHY[d.doc_type] for d, _ in g)))
         ref, outliers = groups[0], [x for g in groups[1:] for x in g]
         outlier_types = {d.doc_type for d, _ in outliers}
         for v in values:
@@ -163,7 +166,28 @@ def cross_document(docs: list[ParsedDocument]) -> list[Check]:
         checks.append(Check(id=f"cross:{key}", category="cross-document", title=f"{label} mismatch", field=key,
                             status=severity, message=message, suggestion=suggestion, values=values))
     checks.append(description_check(docs))
+    _explain_swapped_references(checks)
     return checks
+
+
+def _explain_swapped_references(checks: list[Check]) -> None:
+    """If a document's invoice number equals everyone else's PO number and vice versa, say they look swapped."""
+    by_id = {c.id: c for c in checks}
+    inv, po = by_id.get("cross:invoice_ref"), by_id.get("cross:po_ref")
+    if not inv or not po or inv.status == "pass" or po.status == "pass":
+        return
+    ref_inv = next((v.display for v in inv.values if not v.outlier), None)
+    ref_po = next((v.display for v in po.values if not v.outlier), None)
+    for v in inv.values:
+        if not v.outlier:
+            continue
+        w = next((x for x in po.values if x.doc_type == v.doc_type and x.outlier), None)
+        if w and v.display == ref_po and w.display == ref_inv:
+            note = (f"On the {v.doc_name} the invoice number and PO number look swapped: its invoice-number field "
+                    f"holds the PO number ({ref_po}) and its PO field holds the invoice number ({ref_inv}).")
+            for c in (inv, po):
+                c.message = note
+                c.suggestion = f"Swap the two references on the {v.doc_name}."
 
 
 def _tokens(text: str) -> set[str]:

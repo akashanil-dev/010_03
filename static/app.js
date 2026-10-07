@@ -20,10 +20,10 @@ let pollTimer = null;
 
 /* ---------- views ---------- */
 function show(view) {
-  for (const v of ["upload", "processing", "results", "dashboard"]) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ["upload", "processing", "results"]) $(`#view-${v}`).hidden = v !== view;
   $("#nav-new").classList.toggle("active", view === "upload");
-  $("#nav-dashboard").classList.toggle("active", view === "dashboard");
   window.scrollTo(0, 0);
+  if (view === "upload") loadDashboard();
 }
 
 function goHome() {
@@ -31,6 +31,13 @@ function goHome() {
   current = null;
   history.replaceState(null, "", location.pathname);
   show("upload");
+}
+
+function openDashboard() {
+  // The dashboard lives on the landing page, under the upload area.
+  if ($("#view-upload").hidden) goHome();
+  history.replaceState(null, "", "#dashboard");
+  setTimeout(() => $("#dashboard").scrollIntoView({ behavior: "smooth" }), 50);
 }
 
 /* ---------- upload ---------- */
@@ -126,12 +133,15 @@ function effectiveVerdict() {
   const fl = flags();
   const openErrors = fl.filter((c) => c.status === "error" && reviews[c.id]?.decision !== "overridden");
   const openWarnings = fl.filter((c) => c.status === "warning" && !reviews[c.id]);
-  const overridden = fl.filter((c) => reviews[c.id]?.decision === "overridden").length;
+  const overriddenList = fl.filter((c) => reviews[c.id]?.decision === "overridden");
+  const overridden = overriddenList.length;
+  const overriddenErrors = overriddenList.filter((c) => c.status === "error").length;
+  const overriddenWarnings = overridden - overriddenErrors;
   const reviewed = fl.filter((c) => reviews[c.id]).length;
   let verdict = "ready";
   if (openErrors.length) verdict = "blocked";
   else if (openWarnings.length) verdict = "review";
-  return { verdict, openErrors, openWarnings, overridden, reviewed, total: fl.length };
+  return { verdict, openErrors, openWarnings, overridden, overriddenErrors, overriddenWarnings, reviewed, total: fl.length };
 }
 
 function renderResults() {
@@ -166,8 +176,8 @@ function renderVerdict() {
       <h2>${esc(title)}</h2>
       <p class="sub">${esc(sub)}</p>
       <div class="stats">
-        <div class="stat"><b>${r.counts.errors}</b><span>errors</span></div>
-        <div class="stat"><b>${r.counts.warnings}</b><span>warnings</span></div>
+        <div class="stat"><b>${r.counts.errors}</b><span>errors${v.overriddenErrors ? ` · ${v.overriddenErrors} overridden` : ""}</span></div>
+        <div class="stat"><b>${r.counts.warnings}</b><span>warnings${v.overriddenWarnings ? ` · ${v.overriddenWarnings} overridden` : ""}</span></div>
         <div class="stat"><b>${r.counts.passed}/${r.counts.evaluated}</b><span>checks passed</span></div>
         <div class="stat"><b>${v.reviewed}/${v.total}</b><span>flags reviewed</span></div>
         <div class="stat"><b>${r.documents.length}</b><span>documents read</span></div>
@@ -196,7 +206,7 @@ function renderMatrix() {
   const rows = m.rows.map((row, ri) => {
     const cells = m.columns.map((c, ci) => {
       const cell = row.cells[c.doc_type];
-      if (!cell) return `<td><span class="cell empty">—</span></td>`;
+      if (!cell) return `<td><span class="cell empty" title="${esc(c.doc_name)} does not show this field. Often normal: not every document carries every field.">not stated</span></td>`;
       const vague = cell.status === "mismatch" && row.status === "warning";   // warnings are "too vague", not wrong
       const cls = cell.status === "mismatch" ? (vague ? "vague" : "mismatch") : "";
       const shown = NUMERIC_ROWS.has(row.key) ? (cell.display ?? cell.raw) : cell.raw;
@@ -211,6 +221,7 @@ function renderMatrix() {
     <div class="legend">
       <span><i style="background:var(--red-bg);box-shadow:inset 3px 0 0 var(--red)"></i>Likely wrong value</span>
       <span><i style="background:var(--amber-bg);box-shadow:inset 3px 0 0 var(--amber)"></i>Too vague (warning)</span>
+      <span><i style="border:1px dashed var(--line)"></i><span class="cell-legend">not stated</span> = the document doesn't show that field (often normal)</span>
       <span>Columns follow the document hierarchy: the purchase order is the source of truth.</span>
       <span>Click any value to see where it was read.</span>
     </div>
@@ -270,6 +281,7 @@ function renderIssues() {
       ? `<div class="review-box"><div class="review-done"><b class="${r.decision}">${r.decision === "confirmed" ? "Confirmed as a real problem" : "Overridden (accepted as is)"}</b> by ${esc(r.reviewer)} at ${esc(r.at.replace("T", " "))}${r.note ? ` · “${esc(r.note)}”` : ""}</div><button class="btn small ghost" data-change="${esc(c.id)}">Change</button></div>`
       : `<div class="review-box">
            <div class="review-head"><b>Your decision</b>
+             <label class="reviewer">Your name <input class="reviewer-name" maxlength="60" placeholder="e.g. Anjali, Accounts" value="${esc(reviewerName())}"></label>
              <span class="muted">Confirm it as a real problem, or override it if it is acceptable. Both are saved to the audit log.</span></div>
            <label class="sr-only" for="note-${esc(c.id)}">Reason for your decision</label>
            <textarea maxlength="1000" placeholder="Why? (optional to confirm, required to override)" id="note-${esc(c.id)}"></textarea>
@@ -293,12 +305,20 @@ function renderIssues() {
   $$("[data-change]").forEach((b) => b.onclick = () => { delete current.reviews[b.dataset.change]; renderIssues(); });
 }
 
+function reviewerName() {
+  try { return localStorage.getItem("tallytime-reviewer") || ""; } catch { return ""; }
+}
+
 async function submitReview(checkId, decision) {
   const note = document.getElementById(`note-${checkId}`)?.value || "";
+  const box = document.getElementById(`issue-${checkId}`);
+  const reviewer = (box?.querySelector(".reviewer-name")?.value || "").trim();
+  if (!reviewer) { alert("Please enter your name, so the audit log shows who made this decision."); return; }
+  try { localStorage.setItem("tallytime-reviewer", reviewer); } catch {}
   if (decision === "overridden" && !note.trim()) { alert("Please write a note explaining why this flag is accepted."); return; }
   const res = await fetch(`/api/shipments/${current.id}/reviews`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ check_id: checkId, decision, note }),
+    body: JSON.stringify({ check_id: checkId, decision, note, reviewer }),
   });
   if (!res.ok) { alert((await res.json()).detail || "Could not save the review"); return; }
   const fresh = await (await fetch(`/api/shipments/${current.id}`)).json();
@@ -470,10 +490,7 @@ function bars(items, hot) {
       <b>${i.count}</b></div>`).join("")}</div>`;
 }
 
-async function openDashboard() {
-  clearInterval(pollTimer);
-  history.replaceState(null, "", "#dashboard");
-  show("dashboard");
+async function loadDashboard() {
   const d = await (await fetch("/api/dashboard")).json();
   if (!d.shipments) {
     $("#dash-body").innerHTML = `<div class="empty-state" style="margin-top:18px">No shipments checked yet. Run a check and it will appear here.</div>`;
@@ -508,6 +525,21 @@ async function openDashboard() {
   $$("[data-open]").forEach((r) => r.onclick = () => track(r.dataset.open));
 }
 
+/* ---------- model badge ---------- */
+async function loadModelInfo() {
+  try {
+    const res = await fetch("/api/info");
+    if (!res.ok) return;                       // older server: keep the default text
+    const m = await res.json();
+    if (!m.model || !m.where) return;
+    $("#model-text").textContent = `${m.model} · ${m.where}`;
+    $("#model-badge").title = m.local
+      ? "The AI model that reads the documents runs on this computer. Nothing is sent to an external service."
+      : "Documents are read by the model on IBM watsonx. Text is sent to IBM's cloud for extraction.";
+    $("#model-badge").classList.toggle("cloud", !m.local);
+  } catch { /* keep the default text */ }
+}
+
 /* ---------- wiring ---------- */
 function init() {
   const dz = $("#dropzone");
@@ -527,11 +559,12 @@ function init() {
   $("#drawer-close").onclick = closeDrawer;
   $("#drawer").onclick = (e) => { if (e.target.id === "drawer") closeDrawer(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+  loadModelInfo();
   $("#home-link").onclick = goHome;
   $("#nav-new").onclick = goHome;
   $("#nav-dashboard").onclick = openDashboard;
   const [id, tab] = location.hash.slice(1).split(":");
-  if (id === "dashboard") openDashboard();
+  if (id === "dashboard") { show("upload"); openDashboard(); }
   else if (id) track(id, tab);
   else show("upload");
 }

@@ -81,10 +81,14 @@ def hs_equal(a: str, b: str) -> bool:
     return n >= 4 and a[:n] == b[:n]   # a certificate may carry only 4 or 6 digits
 
 
+PLACEHOLDER_NAMES = {"BUYER", "CONSIGNEE", "SELLER", "EXPORTER", "SHIPPER", "IMPORTER", "APPLICANT", "BENEFICIARY",
+                     "NOTIFY PARTY", "TO ORDER", "TO THE ORDER", "NA", "N/A", "NIL", "NONE", "SAME AS ABOVE", "-"}
+
+
 def company(raw: str | None) -> str | None:
     """'Kayal Marine Exports Private Limited' and 'KAYAL MARINE EXPORTS PVT. LTD.' -> 'KAYAL MARINE EXPORTS PVT LTD'"""
-    if not raw:
-        return None
+    if not raw or raw.strip().upper().rstrip(":.") in PLACEHOLDER_NAMES:
+        return None   # the model copied a label ("Buyer"), not a name
     name = raw.split(",")[0].upper()
     name = re.sub(r"[.\-&]", " ", name)
     for pattern, short in COMPANY_SUFFIXES:

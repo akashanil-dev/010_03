@@ -9,6 +9,21 @@ load_dotenv()
 
 PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 
+MODEL_NAMES = {   # friendly names for the badge in the header
+    "granite4:micro": "IBM Granite 4.0 Micro (3B)",
+    "granite3.3:2b": "IBM Granite 3.3 (2B)",
+    "ibm/granite-3-8b-instruct": "IBM Granite 3 (8B)",
+}
+
+
+def model_info() -> dict:
+    """Which model reads the documents, and where it runs."""
+    if PROVIDER == "watsonx":
+        model = os.getenv("WATSONX_MODEL", "ibm/granite-3-8b-instruct")
+        return {"model": MODEL_NAMES.get(model, model), "where": "IBM watsonx (cloud)", "local": False}
+    model = os.getenv("OLLAMA_MODEL", "granite4:micro")
+    return {"model": MODEL_NAMES.get(model, model), "where": "on this machine", "local": True}
+
 
 def complete_json(prompt: str, schema: dict) -> dict:
     """Ask the model for a JSON object that follows `schema`."""

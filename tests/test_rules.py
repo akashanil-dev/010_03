@@ -152,3 +152,39 @@ def test_unreadable_file_is_reported():
     from app.report import build
     checks = build(errors_docs(), failed=[("pl.pdf", "Failed to connect to Ollama")])["checks"]
     assert checks[0]["id"] == "intake:read_failed:pl.pdf" and "not running" in checks[0]["message"]
+
+
+def test_final_verdict_after_overrides():
+    from app.report import build, final_verdict
+    r = build(errors_docs())
+    flags = [c for c in r["checks"] if c["status"] in ("error", "warning")]
+    all_overridden = {c["id"]: {"decision": "overridden"} for c in flags}
+    assert final_verdict(r, all_overridden)["verdict"] == "ready"
+    one_confirmed = dict(all_overridden, **{flags[0]["id"]: {"decision": "confirmed"}})
+    assert final_verdict(r, one_confirmed)["verdict"] == "blocked"
+    assert final_verdict(r, {})["verdict"] == "blocked"
+
+
+def test_label_is_not_a_company_name():
+    assert N.company("Buyer") is None and N.company("Consignee:") is None
+    assert N.company("NordMark Lebensmittel GmbH") == "NORDMARK LEBENSMITTEL GMBH"
+
+
+def test_swapped_invoice_and_po_references():
+    from tests.fixtures import ERRORS_RAW, make_docs
+    raw = {t: dict(v) for t, v in ERRORS_RAW.items()}
+    raw["packing_list"]["invoice_number"], raw["packing_list"]["po_number"] = "NHF-PO-2026-0418", "KME/EXP/26-27/0093"
+    from app.report import build
+    checks = {c["id"]: c for c in build(make_docs(raw))["checks"]}
+    assert "look swapped" in checks["cross:invoice_ref"]["message"]
+
+
+def test_verified_value_wins_a_tie():
+    from tests.fixtures import ERRORS_RAW, make_docs
+    from app.rules import cross_document
+    raw = {"packing_list": dict(ERRORS_RAW["packing_list"]), "shipping_bill": dict(ERRORS_RAW["shipping_bill"])}
+    raw["shipping_bill"]["gross_weight"] = "13,500.000"
+    docs = make_docs(raw)
+    docs[0].fields["gross_weight"].verified = False       # packing list value not found in its source
+    check = next(c for c in cross_document(docs) if c.id == "cross:gross_weight")
+    assert [v.doc_type for v in check.values if v.outlier] == ["packing_list"]

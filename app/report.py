@@ -55,6 +55,22 @@ def build(docs: list[ParsedDocument], failed: list[tuple[str, str]] = ()) -> dic
     }
 
 
+def final_verdict(report: dict, reviews: dict) -> dict:
+    """The verdict after human review: overridden errors stop blocking; warnings need a decision.
+
+    Same rule as the page uses, so the shipment page and the dashboard always agree.
+    """
+    flags = [c for c in report["checks"] if c["status"] in ("error", "warning")]
+    overridden = [c for c in flags if reviews.get(c["id"], {}).get("decision") == "overridden"]
+    open_errors = [c for c in flags if c["status"] == "error" and c not in overridden]
+    open_warnings = [c for c in flags if c["status"] == "warning" and c["id"] not in reviews]
+    verdict = "blocked" if open_errors else "review" if open_warnings else "ready"
+    return {"verdict": verdict, "open_errors": len(open_errors), "open_warnings": len(open_warnings),
+            "overridden_errors": sum(c["status"] == "error" for c in overridden),
+            "overridden_warnings": sum(c["status"] == "warning" for c in overridden),
+            "reviewed": sum(c["id"] in reviews for c in flags), "flags": len(flags)}
+
+
 def coverage(docs: list[ParsedDocument]) -> list[dict]:
     """Which expected document types are present: required ones block filing, the others are expected."""
     present = {d.doc_type for d in docs if d.doc_type}

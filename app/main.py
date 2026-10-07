@@ -26,6 +26,9 @@ STATIC = ROOT / "static"
 
 app = FastAPI(title="TallyTime: Export Document Verification")
 SHIPMENTS: dict[str, dict] = store.load_all()   # working copy; every change is saved to SQLite
+for _s in SHIPMENTS.values():   # history saved before final verdicts existed
+    if _s.get("report") and "final" not in _s:
+        _s["final"] = report.final_verdict(_s["report"], _s.get("reviews", {}))
 LOCK = threading.Lock()           # the local model reads one document at a time
 
 
@@ -78,6 +81,7 @@ def _process(sid: str):
     failed = [(i["filename"], i.get("error", "")) for i in s["files"] if i["state"] == "error"]
     s["report"] = report.build(docs, failed)
     s["label"] = _label(docs) or sid
+    s["final"] = report.final_verdict(s["report"], s["reviews"])
     s["state"] = "done"
     store.save(s)
 
@@ -166,14 +170,14 @@ def get_shipment(sid: str):
         files.append(item)
     return {"id": sid, "label": s.get("label"), "created": s.get("created"), "state": s["state"], "files": files,
             "report": s["report"],
-            "reviews": s["reviews"], "audit": s["audit"]}
+            "reviews": s["reviews"], "audit": s["audit"], "final": s.get("final")}
 
 
 class Review(BaseModel):
     check_id: str
     decision: str          # "confirmed" (a real problem) | "overridden" (accepted as is)
     note: str = ""
-    reviewer: str = "Reviewer"
+    reviewer: str = ""
 
 
 @app.post("/api/shipments/{sid}/reviews")
@@ -188,9 +192,11 @@ def add_review(sid: str, review: Review):
         raise HTTPException(400, "The note is too long (1000 characters at most)")
     if review.decision == "overridden" and not review.note.strip():
         raise HTTPException(400, "A note is required to override a flag")
-    entry = review.model_dump() | {"at": datetime.now().isoformat(timespec="seconds")}
+    name = " ".join(review.reviewer.split())[:60] or "Unnamed reviewer"
+    entry = review.model_dump() | {"reviewer": name, "at": datetime.now().isoformat(timespec="seconds")}
     s["reviews"][review.check_id] = entry
     s["audit"].append(entry)
+    s["final"] = report.final_verdict(s["report"], s["reviews"])
     store.save(s)
     return {"ok": True}
 
@@ -213,6 +219,12 @@ def delete_shipment(sid: str):
     SHIPMENTS.pop(sid, None)
     store.delete(sid)
     return {"deleted": sid}
+
+
+@app.get("/api/info")
+def info():
+    from .llm import model_info
+    return model_info()
 
 
 @app.get("/api/dashboard")

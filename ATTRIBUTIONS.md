@@ -20,7 +20,7 @@
 | [Pillow](https://python-pillow.org) | Simulated scan for the demo set | MIT-CMU |
 | [IBM watsonx.ai SDK](https://pypi.org/project/ibm-watsonx-ai/) | Optional cloud provider | BSD-3 |
 | python-dotenv, pytest | Configuration, tests | BSD-3, MIT |
-| [IBM Plex](https://github.com/IBM/plex) via Google Fonts | Interface typeface | OFL |
+| [Wikimedia Codex](https://doc.wikimedia.org/codex/) design language | The interface's visual style (colours, spacing, components) was written by hand following Codex's published design tokens and guidelines; no Codex code is included | Design reference |
 
 ## Data
 

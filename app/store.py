@@ -26,7 +26,8 @@ def save(s: dict) -> None:
     counts = r.get("counts", {})
     with _lock, _conn() as c:
         c.execute("INSERT OR REPLACE INTO shipments VALUES (?,?,?,?,?,?,?,?)",
-                  (s["id"], s["created"], s.get("label", ""), s["state"], r.get("verdict"),
+                  (s["id"], s["created"], s.get("label", ""), s["state"],
+                   (s.get("final") or {}).get("verdict") or r.get("verdict"),
                    counts.get("errors", 0), counts.get("warnings", 0), json.dumps(s)))
 
 
@@ -55,7 +56,9 @@ def blamed_documents(check: dict) -> list[str]:
 
 def dashboard(shipments: list[dict]) -> dict:
     done = [s for s in shipments if s.get("report")]
-    verdicts = Counter(s["report"]["verdict"] for s in done)
+    def verdict(s):   # after human review, when there has been one
+        return (s.get("final") or {}).get("verdict") or s["report"]["verdict"]
+    verdicts = Counter(verdict(s) for s in done)
     issue_types, by_doc = Counter(), Counter()
     flags_total = 0
     for s in done:
@@ -76,7 +79,8 @@ def dashboard(shipments: list[dict]) -> dict:
         "top_issues": issue_types.most_common(8),
         "by_document": [{"doc_type": t, "owner": OWNERS.get(t, t), "count": n} for t, n in by_doc.most_common()],
         "recent": [{"id": s["id"], "created": s["created"], "label": s.get("label") or s["id"],
-                    "verdict": s["report"]["verdict"], "counts": s["report"]["counts"],
+                    "verdict": verdict(s), "counts": s["report"]["counts"],
+                    "overridden": (s.get("final") or {}).get("overridden_errors", 0),
                     "documents": len(s["report"]["documents"]),
                     "reviewed": len(s.get("reviews", {}))} for s in recent],
     }

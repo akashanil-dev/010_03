@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TallyTime · Export Document Verification</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -19,8 +17,8 @@
     <button class="navlink" id="nav-new">New check</button>
     <button class="navlink" id="nav-dashboard">Dashboard</button>
   </nav>
-  <div class="privacy-badge" title="Documents are read by an AI model running on this computer. Nothing is sent to an external service.">
-    <span class="dot"></span> Local AI · documents stay on this machine
+  <div class="privacy-badge" id="model-badge" title="The AI model that reads the documents runs on this computer. Nothing is sent to an external service.">
+    <span class="dot"></span> <span id="model-text">IBM Granite 4.0 Micro (3B) · on this machine</span>
   </div>
 </header>
 
@@ -34,7 +32,15 @@
     </div>
 
     <div class="upload-grid">
-      <div class="card">
+      <div class="card upload-card">
+        <div class="needed">
+          <div class="need-group"><span class="need-label">Required</span>
+            <span class="need req">Commercial invoice</span><span class="need req">Packing list</span><span class="need req">Shipping bill</span></div>
+          <div class="need-group"><span class="need-label">Recommended</span>
+            <span class="need rec">Purchase order</span><span class="need rec">Quality / health certificate</span><span class="need rec">Certificate of origin</span></div>
+          <div class="need-group"><span class="need-label">Optional</span>
+            <span class="need opt" title="If you add the letter of credit, every document is also checked against its terms">Letter of credit</span></div>
+        </div>
         <label id="dropzone" class="dropzone" for="file-input">
           <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.xlsx,.xls,.ods,.docx,.doc,.odt,.csv" multiple hidden>
           <strong>Drop documents here</strong>
@@ -46,12 +52,12 @@
           <button id="btn-check" class="btn primary" disabled>Check documents</button>
           <button id="btn-clear" class="btn ghost" hidden>Clear</button>
         </div>
-        <p class="hint">Recognised: purchase order, commercial invoice, packing list, shipping bill, health certificate, certificate of origin.</p>
+        <p class="hint">Each document is recognised by its title. Missing required documents block the shipment; missing recommended ones raise a warning.</p>
       </div>
 
       <div class="card demo-card">
         <p class="eyebrow">TRY A DEMO SHIPMENT</p>
-        <p class="muted">A synthetic Kochi shrimp export to Rotterdam: six documents, fictitious companies.</p>
+        <p class="muted small">Synthetic Kochi shrimp export to Rotterdam, fictitious companies.</p>
         <button class="btn demo" data-demo="errors"><b>With planted errors</b><span>8 issues hidden across 6 documents</span></button>
         <button class="btn demo" data-demo="scanned"><b>Errors + scanned packing list</b><span>One document is an image-only scan</span></button>
         <button class="btn demo" data-demo="bundle"><b>All 6 documents in one PDF</b><span>A merged bundle, split automatically</span></button>
@@ -61,6 +67,12 @@
         <button class="btn demo" data-demo="clean"><b>Clean shipment</b><span>Everything should match</span></button>
       </div>
     </div>
+
+    <section id="dashboard" class="dash-section" aria-labelledby="dash-title">
+      <p class="eyebrow">SUMMARY DASHBOARD</p>
+      <h2 id="dash-title">Shipments checked so far</h2>
+      <div id="dash-body"></div>
+    </section>
   </section>
 
   <!-- Processing -->
@@ -71,12 +83,6 @@
     <ol id="progress-list" class="progress-list"></ol>
   </section>
 
-  <!-- Dashboard -->
-  <section id="view-dashboard" class="view" hidden>
-    <p class="eyebrow">SUMMARY DASHBOARD</p>
-    <h2>All shipments checked</h2>
-    <div id="dash-body"></div>
-  </section>
 
   <!-- Results -->
   <section id="view-results" class="view" hidden>
