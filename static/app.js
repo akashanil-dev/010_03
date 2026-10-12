@@ -20,17 +20,35 @@ let pollTimer = null;
 
 /* ---------- views ---------- */
 function show(view) {
-  for (const v of ["upload", "processing", "results"]) $(`#view-${v}`).hidden = v !== view;
+  for (const v of ["upload", "processing", "results", "auth", "account"]) $(`#view-${v}`).hidden = v !== view;
   $("#nav-new").classList.toggle("active", view === "upload");
+  $("#nav-account").classList.toggle("active", view === "account");
+  if (view === "auth") { $("#mainnav").hidden = true; $("#account-bar").hidden = true; }
+  if (view !== "processing" && view !== "results") { clearInterval(pollTimer); current = null; }
   window.scrollTo(0, 0);
-  if (view === "upload") loadDashboard();
+  if (view === "upload") { loadDashboard(); renderQuota(); }
 }
 
 function goHome() {
-  clearInterval(pollTimer);
-  current = null;
   history.replaceState(null, "", location.pathname);
   show("upload");
+}
+
+function openQueue() {
+  if ($("#view-upload").hidden) goHome();
+  if ($("#queue").hidden) { toast("No checks in the queue right now."); return; }
+  history.replaceState(null, "", "#queue");
+  setTimeout(() => $("#queue").scrollIntoView({ behavior: "smooth" }), 50);
+}
+
+/* Open whatever the address points at: a shipment, the dashboard, the queue or the account page. */
+function openFromHash() {
+  const [id, tab] = location.hash.slice(1).split(":");
+  if (id === "dashboard") { show("upload"); openDashboard(); }
+  else if (id === "queue") { show("upload"); openQueue(); }
+  else if (id === "account") openAccount();
+  else if (id && /^[0-9a-f]{10,32}$/.test(id)) track(id, tab);
+  else goHome();
 }
 
 function openDashboard() {
@@ -68,35 +86,44 @@ async function submitUpload() {
   const form = new FormData();
   selected.forEach((f) => form.append("files", f));
   $("#btn-check").disabled = true;
-  const res = await fetch("/api/shipments", { method: "POST", body: form });
-  if (!res.ok) { alert((await res.json()).detail || "Upload failed"); $("#btn-check").disabled = false; return; }
-  const { id } = await res.json();
+  let id;
+  try { ({ id } = await api("/api/shipments", { method: "POST", form })); }
+  catch (e) { if (e.status !== 401) alert(e.message); $("#btn-check").disabled = false; return; }
   selected = [];
   renderFileList();
-  track(id);
+  started(id);
 }
 
 async function startDemo(name) {
-  const res = await fetch(`/api/demo/${name}`, { method: "POST" });
-  const { id } = await res.json();
+  try { const { id } = await api(`/api/demo/${name}`, { method: "POST" }); started(id); }
+  catch (e) { if (e.status !== 401) alert(e.message); }
+}
+
+function started(id) {
   track(id);
+  refreshMe();
+  offerNotifications();
 }
 
 /* ---------- polling ---------- */
+const ENDED = ["cancelled", "failed", "interrupted"];
+let shownPercent = {};   // per shipment, so the bar never moves backwards
+
 function track(id, tab) {
   history.replaceState(null, "", `#${id}`);
   show("processing");
   clearInterval(pollTimer);
+  $("#job-status").innerHTML = '<p class="muted">Loading…</p>';
+  $("#progress-list").innerHTML = "";
   const tick = async () => {
-    const res = await fetch(`/api/shipments/${id}`);
-    if (!res.ok) { clearInterval(pollTimer); alert("This shipment no longer exists."); goHome(); return; }
-    current = await res.json();
-    if (current.state === "interrupted") {
+    let s;
+    try { s = await api(`/api/shipments/${id}`); }
+    catch (e) {
       clearInterval(pollTimer);
-      alert("This check was interrupted by a server restart. Please upload the documents again.");
-      goHome();
+      if (e.status === 404) { alert("This shipment no longer exists. Shipments are deleted automatically after 7 days, or when someone deletes them."); goHome(); }
       return;
     }
+    current = s;
     if (current.state === "done") {
       clearInterval(pollTimer);
       renderResults();
@@ -104,22 +131,55 @@ function track(id, tab) {
       if (tab) switchTab(tab);
     } else {
       renderProgress();
+      if (ENDED.includes(current.state)) clearInterval(pollTimer);
     }
   };
   tick();
-  pollTimer = setInterval(tick, 1000);
+  pollTimer = setInterval(tick, 1500);
 }
 
 function renderProgress() {
+  const j = current.job || {};
+  const st = current.state;
+  let title = "Reading each document and extracting every field", html;
+  if (st === "queued") {
+    title = "Waiting in the queue";
+    const ahead = j.ahead ? `${j.ahead} ${j.ahead === 1 ? "check is" : "checks are"} ahead of yours.` : "Yours is next.";
+    html = `<p><b>${ahead}</b> It starts in ${fmtDur(j.starts_in)} and should be finished in ${fmtDur(j.eta)}.</p>`;
+  } else if (st === "processing") {
+    const pct = Math.max(shownPercent[current.id] || 0, j.percent || 0);
+    shownPercent[current.id] = pct;
+    html = j.cancelling ? "<p><b>Stopping…</b></p>" : `<p><b>${pct}% done</b> · ${fmtDur(j.eta)} left</p>${progressBar(pct)}`;
+  } else {
+    title = { cancelled: "This check was cancelled", failed: "This check could not be completed", interrupted: "This check was interrupted" }[st] || "Check ended";
+    html = `<p>${esc(j.reason || (st === "interrupted" ? "The server restarted before this check finished. Please upload the documents again." : ""))}</p>`;
+  }
+  $("#proc-title").textContent = title;
+  const active = ["queued", "processing"].includes(st);
+  const notify = active && window.Notification && Notification.permission === "default"
+    ? `<button class="btn small" id="proc-notify">Notify me when it is done</button>` : "";
+  $("#job-status").innerHTML = `${html}<div class="row-actions">
+    ${active && !j.cancelling ? `<button class="btn small danger" id="proc-cancel">Cancel check</button>` : ""}${notify}
+    ${!active ? `<button class="btn small" id="proc-home">New check</button><button class="btn small danger" id="proc-delete">Delete uploaded files</button>` : ""}
+    </div>
+    <p class="muted small">${active ? `A document is stopped if it takes more than ${Math.round((publicConfig.doc_timeout || 300) / 60)} minutes, and the whole check after ${Math.round((publicConfig.shipment_timeout || 1800) / 60)} minutes.` : ""}</p>`;
+  $("#proc-cancel")?.addEventListener("click", () => cancelCheck(current.id));
+  $("#proc-notify")?.addEventListener("click", enableNotifications);
+  $("#proc-home")?.addEventListener("click", goHome);
+  $("#proc-delete")?.addEventListener("click", deleteShipment);
+
   $("#progress-list").innerHTML = current.files.map((f) => {
     let meta = "Waiting";
     if (f.state === "splitting") meta = "Checking whether this file holds several documents…";
-    if (f.state === "reading") meta = `Reading… ${Math.round(f.elapsed || 0)} s`;
+    if (f.state === "reading") meta = f.stage === "extracting" ? `Extracting fields · ${f.percent}%` : `Reading the page${(f.page_count || 1) > 1 ? "s" : ""} · ${f.percent}%`;
     if (f.state === "done") meta = `${esc(DOC_SHORT[f.doc_type] || "Unrecognised")}${f.source_format ? " · " + esc(f.source_format) : ""} · ${f.seconds < 1 ? "from cache" : f.seconds + " s"}`;
     if (f.state === "error") meta = `Could not read: ${esc(f.error)}`;
+    if (f.state === "skipped") meta = esc(f.error || "Not read");
+    if (f.state === "queued" && ["queued", "processing"].includes(st)) meta = `Waiting · ${fmtDur(f.eta)}`;
     const from = f.bundle ? `<br><span class="muted" style="font-size:12px">from ${esc(f.bundle)}, page ${f.pages.join("–")}</span>` : "";
-    const icon = f.state === "splitting" ? "reading" : f.state;
-    return `<li><span class="state-icon ${icon}"></span><span class="mono">${esc(f.filename)}${from}</span><span class="meta">${meta}</span></li>`;
+    const icon = f.state === "splitting" ? "reading" : f.state === "skipped" ? "error" : f.state;
+    const bar = f.state === "reading" ? progressBar(f.percent) : "";
+    return `<li><span class="state-icon ${icon}"></span><span class="mono">${esc(f.filename)}${from}${bar}</span><span class="meta">${meta}</span></li>`;
   }).join("");
 }
 
@@ -194,6 +254,8 @@ function renderVerdict() {
   $("#btn-export").onclick = askReportLanguage;
   $("#btn-new").onclick = goHome;
   $("#btn-delete").onclick = deleteShipment;
+  $("#expiry-note").textContent = current.expires_at
+    ? `This shipment and its files are deleted automatically on ${fmtDate(current.expires_at)}. Export the report to keep a copy.` : "";
   const open = v.openErrors.length + v.openWarnings.length;
   $("#issues-count").textContent = flags().length;
   $("#issues-count").className = "pill" + (open ? " red" : "");
@@ -318,8 +380,13 @@ let team = load("tallytime-team", []);
 let namesOn = load("tallytime-names-on", true);
 let lastReviewer = load("tallytime-last-reviewer", "");
 
+const memberNames = () => (me?.workspace.members || []).map((m) => m.name);
+const reviewers = () => [...new Set([...memberNames(), ...team])];
+
 function teamPanel() {
-  const chips = team.map((n, i) => `<span class="member">${esc(n)}<button class="member-x" data-remove="${i}" aria-label="Remove ${esc(n)}">×</button></span>`).join("");
+  const owner = me?.workspace.role === "owner";
+  const members = memberNames().map((n) => `<span class="member account" title="Workspace member">${esc(n)}</span>`).join("");
+  const chips = members + team.filter((n) => !memberNames().includes(n)).map((n) => `<span class="member">${esc(n)}<button class="member-x" data-remove="${team.indexOf(n)}" aria-label="Remove ${esc(n)}">×</button></span>`).join("");
   return `<div class="team-panel">
     <div class="team-row">
       <b>Review team</b>
@@ -327,17 +394,19 @@ function teamPanel() {
     </div>
     ${namesOn ? `<div class="team-row">
       <div class="members">${chips || '<span class="muted">No names yet. Add the people reviewing this shipment.</span>'}</div>
-      <form id="add-member" class="add-member"><input id="member-name" maxlength="60" placeholder="Name and team, e.g. Anjali, Accounts" aria-label="Reviewer name">
+      <form id="add-member" class="add-member"><input id="member-name" maxlength="254" placeholder="${owner ? "Name (e.g. Anjali, Accounts) or email to invite" : "Name and team, e.g. Anjali, Accounts"}" aria-label="Reviewer name${owner ? " or email" : ""}">
         <button class="btn small" type="submit">Add</button></form>
-    </div>` : `<p class="muted small">Names are not recorded; decisions are logged as "Name not recorded".</p>`}
+    </div>
+    <p class="muted small">${owner ? "Type a name to list someone who reviews with you, or an email address to invite them into this workspace so they can review here themselves." : "Names you type are kept in this browser. The workspace owner can invite people by email."}</p>` : `<p class="muted small">Names are not recorded; decisions are logged as "Name not recorded".</p>`}
   </div>`;
 }
 
 function reviewerPicker() {
   if (!namesOn) return "";
-  if (!team.length) return `<span class="reviewer muted">Add reviewer names in the Review team panel above.</span>`;
-  const selected = team.includes(lastReviewer) ? lastReviewer : team[0];
-  return `<label class="reviewer">Reviewed by <select class="reviewer-name">${team.map((n) =>
+  const names = reviewers();
+  if (!names.length) return `<span class="reviewer muted">Add reviewer names in the Review team panel above.</span>`;
+  const selected = names.includes(lastReviewer) ? lastReviewer : names.includes(me?.name) ? me.name : names[0];
+  return `<label class="reviewer">Reviewed by <select class="reviewer-name">${names.map((n) =>
     `<option ${n === selected ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>`;
 }
 
@@ -345,10 +414,13 @@ function wireTeamPanel() {
   const toggle = $("#names-on");
   if (toggle) toggle.onchange = () => { namesOn = toggle.checked; save("tallytime-names-on", namesOn); renderIssues(); };
   const form = $("#add-member");
-  if (form) form.onsubmit = (e) => {
+  if (form) form.onsubmit = async (e) => {
     e.preventDefault();
     const name = $("#member-name").value.trim().replace(/\s+/g, " ");
-    if (name && !team.includes(name)) { team.push(name); save("tallytime-team", team); }
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(name)) {
+      try { await api("/api/workspaces/invites", { method: "POST", body: { email: name } }); toast(`Invitation sent to ${name}. They appear here once they join.`); }
+      catch (err) { toast(err.message, { kind: "error" }); return; }
+    } else if (name && !team.includes(name)) { team.push(name.slice(0, 60)); save("tallytime-team", team); }
     renderIssues();
     $("#member-name")?.focus();
   };
@@ -366,13 +438,10 @@ async function submitReview(checkId, decision) {
     save("tallytime-last-reviewer", reviewer);
   }
   if (decision === "overridden" && !note.trim()) { alert("Please write a note explaining why this flag is accepted."); return; }
-  const res = await fetch(`/api/shipments/${current.id}/reviews`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ check_id: checkId, decision, note, reviewer }),
-  });
-  if (!res.ok) { alert((await res.json()).detail || "Could not save the review"); return; }
-  const fresh = await (await fetch(`/api/shipments/${current.id}`)).json();
-  current = fresh;
+  try {
+    await api(`/api/shipments/${current.id}/reviews`, { method: "POST", body: { check_id: checkId, decision, note, reviewer } });
+    current = await api(`/api/shipments/${current.id}`);
+  } catch (e) { if (e.status !== 401) alert(e.message); return; }
   renderResults();
   switchTab("issues");
   document.getElementById(`issue-${checkId}`)?.scrollIntoView({ block: "center" });
@@ -426,9 +495,9 @@ function switchTab(name) {
 }
 
 async function deleteShipment() {
-  if (!confirm("Delete the uploaded files for this shipment from this machine? This cannot be undone.")) return;
-  await fetch(`/api/shipments/${current.id}`, { method: "DELETE" });
-  alert("Uploaded files deleted.");
+  if (!confirm("Delete this shipment, its uploaded files and its results from TallyTime for everyone in the workspace? This cannot be undone.")) return;
+  try { await api(`/api/shipments/${current.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
+  toast("Shipment and uploaded files deleted.");
   goHome();
 }
 
@@ -530,10 +599,14 @@ function printReport(reportLang = "en") {
     <p class="final">${esc(T.conclusion(v))}</p>
     <p>${T.tally(r, v, confirmed)}</p>
     <p class="m" style="margin-top:20px">${T.disclaimer}</p>
-    <script>window.onload=()=>window.print()<\/script></body></html>`;
+    </body></html>`;
   const w = window.open("", "_blank");
   w.document.write(html);
   w.document.close();
+  // Print from here: the Content-Security-Policy does not allow inline scripts in the report window
+  const print = () => { w.focus(); w.print(); };
+  if (w.document.readyState === "complete") setTimeout(print, 200);
+  else w.addEventListener("load", print, { once: true });
 }
 
 /* ---------- send fixes ---------- */
@@ -612,9 +685,12 @@ function bars(items, hot) {
 }
 
 async function loadDashboard() {
-  const d = await (await fetch("/api/dashboard")).json();
+  if (!me) return;
+  let d;
+  try { d = await api("/api/dashboard"); } catch { return; }
+  $("#dash-title").textContent = me.workspace.members.length > 1 ? `Shipments checked in ${me.workspace.name}` : "Shipments checked so far";
   if (!d.shipments) {
-    $("#dash-body").innerHTML = `<div class="empty-state" style="margin-top:18px">No shipments checked yet. Run a check and it will appear here.</div>`;
+    $("#dash-body").innerHTML = `<div class="empty-state" style="margin-top:18px">No shipments checked in the last ${publicConfig.retention_days || 7} days. Run a check and it will appear here.</div>`;
     return;
   }
   const top = d.by_document[0];
@@ -655,7 +731,7 @@ async function loadModelInfo() {
     if (!m.model || !m.where) return;
     $("#model-text").textContent = `${m.model} · ${m.where}`;
     $("#model-badge").title = m.local
-      ? "The AI model that reads the documents runs on this computer. Nothing is sent to an external service."
+      ? "The AI model that reads the documents runs on the TallyTime server. Your documents are not sent to any outside AI service."
       : "Documents are read by the model on IBM watsonx. Text is sent to IBM's cloud for extraction.";
     $("#model-badge").classList.toggle("cloud", !m.local);
   } catch { /* keep the default text */ }
@@ -689,10 +765,9 @@ function init() {
   $("#home-link").onclick = goHome;
   $("#nav-new").onclick = goHome;
   $("#nav-dashboard").onclick = openDashboard;
-  const [id, tab] = location.hash.slice(1).split(":");
-  if (id === "dashboard") { show("upload"); openDashboard(); }
-  else if (id) track(id, tab);
-  else show("upload");
+  $("#nav-queue").onclick = openQueue;
+  $("#nav-account").onclick = openAccount;
+  boot();
 }
 
 init();

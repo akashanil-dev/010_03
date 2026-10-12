@@ -68,3 +68,14 @@ def check_content(path: Path, filename: str) -> None:
             raise
         except Exception:
             raise UploadError(f"{filename}: the PDF is damaged and cannot be opened.")
+
+
+def page_count(path: Path) -> int:
+    """Pages in a PDF (for time estimates); other files count as one."""
+    if path.suffix.lower() != ".pdf":
+        return 1
+    try:
+        with pymupdf.open(path) as pdf:
+            return pdf.page_count
+    except Exception:
+        return 1

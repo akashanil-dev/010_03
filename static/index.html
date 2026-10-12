@@ -13,12 +13,18 @@
     <span class="logo">TallyTime</span>
     <span class="tagline">Export document verification</span>
   </div>
-  <nav class="mainnav">
+  <nav class="mainnav" id="mainnav" hidden>
     <button class="navlink" id="nav-new">New check</button>
+    <button class="navlink" id="nav-queue">Queue <span id="queue-count" class="pill" hidden></span></button>
     <button class="navlink" id="nav-dashboard">Dashboard</button>
   </nav>
-  <div class="privacy-badge" id="model-badge" title="The AI model that reads the documents runs on this computer. Nothing is sent to an external service.">
-    <span class="dot"></span> <span id="model-text">IBM Granite 4.0 Micro (3B) · on this machine</span>
+  <div class="privacy-badge" id="model-badge" title="The AI model that reads the documents runs on the TallyTime server. Your documents are not sent to any outside AI service.">
+    <span class="dot"></span> <span id="model-text">IBM Granite 4.0 Micro (3B) · on our server</span>
+  </div>
+  <div class="account-bar" id="account-bar" hidden>
+    <label class="sr-only" for="ws-switch">Workspace</label>
+    <select id="ws-switch" title="Workspace: the shipments you see and share"></select>
+    <button class="navlink" id="nav-account">Account</button>
   </div>
 </header>
 
@@ -51,13 +57,14 @@
         <div class="row-actions">
           <button id="btn-check" class="btn primary" disabled>Check documents</button>
           <button id="btn-clear" class="btn ghost" hidden>Clear</button>
+          <span id="quota-note" class="quota-note"></span>
         </div>
         <p class="hint">Each document is recognised by its title. Missing required documents block the shipment; missing recommended ones raise a warning.</p>
       </div>
 
       <div class="card demo-card">
         <p class="eyebrow">TRY A DEMO SHIPMENT</p>
-        <p class="muted small">Synthetic Kochi shrimp export to Rotterdam, fictitious companies.</p>
+        <p class="muted small">Synthetic Kochi shrimp export to Rotterdam, fictitious companies. Demos do not count towards your daily checks.</p>
         <button class="btn demo" data-demo="errors"><b>With planted errors</b><span>8 issues hidden across 6 documents</span></button>
         <button class="btn demo" data-demo="scanned"><b>Errors + scanned packing list</b><span>One document is an image-only scan</span></button>
         <button class="btn demo" data-demo="bundle"><b>All 6 documents in one PDF</b><span>A merged bundle, split automatically</span></button>
@@ -67,6 +74,13 @@
         <button class="btn demo" data-demo="clean"><b>Clean shipment</b><span>Everything should match</span></button>
       </div>
     </div>
+
+    <section id="queue" class="dash-section" aria-labelledby="queue-title" hidden>
+      <p class="eyebrow">QUEUE</p>
+      <h2 id="queue-title">Your checks</h2>
+      <p class="muted">Checks run one at a time, in the order they arrive. You can leave this page; TallyTime tells you when each one is done.</p>
+      <div id="queue-body"></div>
+    </section>
 
     <section id="dashboard" class="dash-section" aria-labelledby="dash-title">
       <p class="eyebrow">SUMMARY DASHBOARD</p>
@@ -78,8 +92,9 @@
   <!-- Processing -->
   <section id="view-processing" class="view" hidden>
     <p class="eyebrow">STEP 2 · READING DOCUMENTS</p>
-    <h2>Reading each document and extracting every field</h2>
-    <p class="muted">The model runs on this laptop's CPU, so a new document takes about a minute. Documents seen before load instantly.</p>
+    <h2 id="proc-title">Reading each document and extracting every field</h2>
+    <p class="muted">Checks run one at a time on our server, and a new document takes about a minute. You can leave this page: TallyTime notifies you when the check is done.</p>
+    <div id="job-status" class="job-status card"></div>
     <ol id="progress-list" class="progress-list"></ol>
   </section>
 
@@ -87,6 +102,7 @@
   <!-- Results -->
   <section id="view-results" class="view" hidden>
     <div id="verdict" class="verdict"></div>
+    <p id="expiry-note" class="expiry-note"></p>
     <div class="langbar"><span class="muted">Issue language</span>
       <button class="lang active" data-lang="en">English</button><button class="lang" data-lang="ml">മലയാളം</button></div>
     <nav class="tabs" role="tablist">
@@ -111,7 +127,33 @@
       <button class="btn primary" id="btn-export">Export report (PDF)</button>
     </div>
   </section>
+
+  <!-- Sign in, sign up, confirm email, reset password, accept terms, accept invitation -->
+  <section id="view-auth" class="view" hidden>
+    <div class="auth-wrap">
+      <div class="auth-intro">
+        <p class="eyebrow">EXPORT DOCUMENT VERIFICATION</p>
+        <h1>Catch document mismatches before customs does.</h1>
+        <p class="lead">Upload a shipment's documents. TallyTime compares every fact across them and tells you exactly what to fix, with the evidence.</p>
+        <ul class="auth-points">
+          <li><b>Free.</b> <span id="auth-quota">5</span> checks a day, plus unlimited demo shipments.</li>
+          <li><b>Private.</b> Only your workspace sees your shipments. The AI model runs on our server, not an outside service.</li>
+          <li><b>Not kept.</b> Documents and results are deleted automatically after <span id="auth-retention">7</span> days.</li>
+        </ul>
+      </div>
+      <div class="card auth-card" id="auth-card"></div>
+    </div>
+  </section>
+
+  <!-- Account settings -->
+  <section id="view-account" class="view" hidden>
+    <p class="eyebrow">ACCOUNT</p>
+    <h2>Account and workspace</h2>
+    <div id="account-body" class="account-grid"></div>
+  </section>
 </main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <div id="report-dialog" class="dialog-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="report-dialog-title">
   <div class="dialog">
@@ -132,8 +174,10 @@
   </div>
 </aside>
 
-<footer class="foot">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
+<footer class="foot">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call.
+  <br><a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Use</a></footer>
 <script src="ml.js"></script>
+<script src="session.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

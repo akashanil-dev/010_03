@@ -14,6 +14,7 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
+from .formats import FORMAT_LABEL, IMAGE_TYPES, OFFICE_TYPES, SUPPORTED  # noqa: F401
 from .schemas import DOC_TYPES
 
 # Title keywords, checked in this order (certificate of origin before generic certificates).
@@ -41,11 +42,6 @@ def has_text_layer(path: Path) -> bool:
         return sum(len(page.get_text().strip()) for page in pdf) > 50
 
 
-IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
-OFFICE_TYPES = {".xlsx", ".xls", ".ods", ".docx", ".doc", ".odt", ".csv"}
-SUPPORTED = {".pdf"} | IMAGE_TYPES | OFFICE_TYPES
-FORMAT_LABEL = {".xlsx": "Excel", ".xls": "Excel", ".ods": "Spreadsheet", ".docx": "Word", ".doc": "Word",
-                ".odt": "Document", ".csv": "CSV"}
 
 
 def skew_angle(img) -> float:

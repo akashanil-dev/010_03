@@ -10,3 +10,5 @@ ollama
 ibm-watsonx-ai
 python-dotenv
 pytest
+argon2-cffi
+pywebpush

@@ -3,17 +3,9 @@
 import json
 import sqlite3
 
-import pytest
-
 from app import store
 from app.report import build
 from tests.fixtures import errors_docs
-
-
-@pytest.fixture(autouse=True)
-def fresh_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(store, "DB", tmp_path / "tally.db")
-    store.init()
 
 
 def files(*names):
@@ -23,7 +15,7 @@ def files(*names):
 def test_create_and_get_round_trip():
     store.create("s1", files("a.pdf", "b.xlsx"), created=1000.0)
     s = store.get("s1")
-    assert s["state"] == "processing"
+    assert s["state"] == "queued"
     assert [f["filename"] for f in s["files"]] == ["a.pdf", "b.xlsx"]
     assert s["expires_at"] == 1000.0 + 7 * 86400
     assert s["report"] is None and s["reviews"] == {} and s["audit"] == []
@@ -67,7 +59,7 @@ def test_finish_and_reviews_update_the_final_verdict():
     s = store.get("s1")
     assert s["reviews"][errors[0]]["decision"] == "confirmed" and len(s["audit"]) == len(errors) + 1
     assert s["final"]["verdict"] == "blocked"
-    assert store.dashboard(store.finished())["recent"][0]["reviewed"] == len(errors)
+    assert store.finished("ws1") == []   # not in this workspace
 
 
 def test_delete_removes_files_reviews_and_audit():
@@ -81,12 +73,13 @@ def test_delete_removes_files_reviews_and_audit():
         assert [c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("files", "reviews", "audit")] == [0, 0, 0]
 
 
-def test_unfinished_checks_are_marked_interrupted():
-    store.create("s1", files("a.pdf"))
-    store.create("s2", files("b.pdf"))
-    store.finish("s2", build(errors_docs()), "x")
-    store.mark_interrupted()
-    assert store.get("s1")["state"] == "interrupted" and store.get("s2")["state"] == "done"
+def test_dashboard_counts_one_workspace():
+    store.create("s1", files("a.pdf"), workspace_id="ws1")
+    store.create("s2", files("b.pdf"), workspace_id="ws2")
+    for sid in ("s1", "s2"):
+        store.finish(sid, build(errors_docs()), sid)
+    d = store.dashboard(store.finished("ws1"))
+    assert d["shipments"] == 1 and d["recent"][0]["id"] == "s1"
 
 
 def test_upgrade_from_single_blob_table(tmp_path, monkeypatch):
@@ -110,3 +103,46 @@ def test_upgrade_from_single_blob_table(tmp_path, monkeypatch):
     assert s["label"] == "L" and s["reviews"][cid]["note"] == "fine" and len(s["audit"]) == 1
     assert s["final"]["overridden_errors"] == 1
     assert store.get("old2")["state"] == "interrupted"
+
+
+def test_concurrent_readers_and_writers_do_not_lock():
+    """Requests check sessions while the worker writes progress; neither may fail with 'database is locked'."""
+    import threading
+    import time
+
+    from app import accounts, progress
+
+    user = accounts.create_user("a@example.com", "A", "correct horse 1")
+    token = accounts.create_session(user["id"])
+    store.create("s1", files("a.pdf"))
+    errors, stop = [], time.time() + 2
+
+    def reader():
+        while time.time() < stop:
+            try:
+                with store._db() as c:   # a long read, like the dashboard
+                    c.execute("SELECT * FROM files").fetchall()
+                    accounts.update_user(user["id"], name="A")
+                    assert accounts.session_user(token)
+            except Exception as e:
+                errors.append(repr(e))
+
+    def writer():
+        n = 0
+        while time.time() < stop:
+            try:
+                store.update_file("s1", 0, chars=n)
+                progress.record("page:text", 3.0)
+                n += 1
+            except Exception as e:
+                errors.append(repr(e))
+
+    # Force the hourly expiry refresh on every check, the worst case
+    with store._db() as c:
+        c.execute("UPDATE sessions SET expires = 0 + ?", (time.time() + 60,))
+    threads = [threading.Thread(target=reader) for _ in range(4)] + [threading.Thread(target=writer) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []

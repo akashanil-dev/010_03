@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 
 from dotenv import load_dotenv
 
@@ -22,27 +23,37 @@ def model_info() -> dict:
         model = os.getenv("WATSONX_MODEL", "ibm/granite-3-8b-instruct")
         return {"model": MODEL_NAMES.get(model, model), "where": "IBM watsonx (cloud)", "local": False}
     model = os.getenv("OLLAMA_MODEL", "granite4:micro")
-    return {"model": MODEL_NAMES.get(model, model), "where": "on this machine", "local": True}
+    return {"model": MODEL_NAMES.get(model, model), "where": "on our server", "local": True}
 
 
-def complete_json(prompt: str, schema: dict) -> dict:
-    """Ask the model for a JSON object that follows `schema`."""
+def complete_json(prompt: str, schema: dict, on_chars=None) -> dict:
+    """Ask the model for a JSON object that follows `schema`.
+
+    on_chars(n), if given, is called as the answer streams in with the characters received so far
+    (local model only), so the page can show how far along the extraction is.
+    """
     if PROVIDER == "watsonx":
         return _watsonx(prompt, schema)
-    return _ollama(prompt, schema)
+    return _ollama(prompt, schema, on_chars)
 
 
-def _ollama(prompt: str, schema: dict) -> dict:
+def _ollama(prompt: str, schema: dict, on_chars=None) -> dict:
     import ollama
 
     client = ollama.Client(host=os.getenv("OLLAMA_HOST", "http://localhost:11434"))
-    resp = client.chat(
+    parts, last = [], 0.0
+    for chunk in client.chat(
         model=os.getenv("OLLAMA_MODEL", "granite4:micro"),
         messages=[{"role": "user", "content": prompt}],
         format=schema,
         options={"temperature": 0, "num_ctx": 8192},
-    )
-    return json.loads(resp["message"]["content"])
+        stream=True,
+    ):
+        parts.append(chunk["message"]["content"])
+        if on_chars and time.monotonic() - last > 1:
+            last = time.monotonic()
+            on_chars(sum(map(len, parts)))
+    return json.loads("".join(parts))
 
 
 def _watsonx(prompt: str, schema: dict) -> dict:

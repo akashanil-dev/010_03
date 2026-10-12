@@ -1,6 +1,7 @@
 """Assemble the shipment report: verdict, checks and the Shipment Truth Matrix."""
 
 from . import readiness, rules
+from .normalize import reference
 from .schemas import DOC_TYPES, FIELDS, HIERARCHY, OWNERS, ParsedDocument
 
 MATRIX_FIELDS = ["cartons", "net_weight", "gross_weight", "hs_code", "exporter_name", "consignee_name",
@@ -118,3 +119,16 @@ def matrix(docs: list[ParsedDocument], checks: list[dict]) -> dict:
     return {"columns": [{"doc_type": d.doc_type, "doc_name": DOC_TYPES[d.doc_type], "filename": d.filename}
                         for d in docs],
             "rows": rows}
+
+
+def label(docs: list[ParsedDocument]) -> str:
+    """'KME/EXP/26-27/0093 · Noordhaven Foods B.V.' from the invoice, falling back to any document."""
+    def first(key, prefer):
+        for d in sorted(docs, key=lambda d: d.doc_type != prefer):
+            f = d.fields.get(key)
+            if f and f.raw:
+                return f.raw.split(",")[0]
+        return None
+    inv = first("doc_number", "commercial_invoice") if any(d.doc_type == "commercial_invoice" for d in docs) else None
+    inv = reference(inv) if inv else None
+    return " · ".join(x for x in (inv, first("consignee_name", "commercial_invoice")) if x)

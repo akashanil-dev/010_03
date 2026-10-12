@@ -30,11 +30,11 @@ def build_schema(keys: list[str]) -> dict:
     }
 
 
-def extract_fields(doc_type: str, text: str) -> dict[str, ExtractedField]:
+def extract_fields(doc_type: str, text: str, on_chars=None) -> dict[str, ExtractedField]:
     keys = DOC_FIELDS[doc_type]
     field_list = "\n".join(f"- {k}: {FIELDS[k][1]}" for k in keys)
     prompt = PROMPT.format(doc_name=DOC_TYPES[doc_type], field_list=field_list, text=text[:12000])
-    data = llm.complete_json(prompt, build_schema(keys))
+    data = llm.complete_json(prompt, build_schema(keys), on_chars)
 
     out = {}
     for key in keys:
