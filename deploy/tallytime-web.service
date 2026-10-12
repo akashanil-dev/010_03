@@ -1,0 +1,20 @@
+[Unit]
+Description=TallyTime web app
+After=network.target
+
+[Service]
+User=tallytime
+Group=tallytime
+WorkingDirectory=/opt/tallytime
+# One process on purpose: the request rate limiter lives in memory. The heavy work runs in the worker.
+ExecStart=/opt/tallytime/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tallytime/data
+
+[Install]
+WantedBy=multi-user.target

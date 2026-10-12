@@ -6,7 +6,7 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 
 > **AI reads, rules judge.** An AI model (IBM Granite, running locally) only *extracts* values. Every pass/fail decision comes from deterministic, inspectable rules.
 
-**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use TallyTime, step by step](#how-to-use-tallytime-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Configuration](#configuration) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
+**Contents:** [Features](#features) · [Quick start (setup)](#quick-start) · [How to use TallyTime, step by step](#how-to-use-tallytime-step-by-step) · [What it checks](#what-it-checks) · [How it works](#how-it-works) · [Configuration](#configuration) · [Public deployment](#public-deployment) · [Results](#results-on-the-demo-shipment) · [Responsible AI](#responsible-ai-privacy-and-security) · [Limitations](#limitations)
 
 ## Features
 
@@ -20,8 +20,12 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **New rules for Kerala products:** EUDR due diligence for natural rubber to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
 - **Send fixes to the right team:** issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker, documentation) with one-tap **WhatsApp**, email or copy.
 - **Malayalam:** issue text, fix messages and the exported report can be in Malayalam for warehouse and floor staff (the original English stays alongside each issue).
-- **Summary dashboard:** shipments checked, ready / needs review / fix before filing, the most common issues, and **which document and team causes the most errors**. History is stored in SQLite.
-- **Review team and final verdict:** add the reviewers' names once and pick them from a dropdown on each issue (or switch names off). Overrides need a reason; the final verdict after review is shown on the shipment, the dashboard and the report.
+- **Summary dashboard:** shipments checked, ready / needs review / fix before filing, the most common issues, and **which document and team causes the most errors**, for your workspace. History is stored in SQLite.
+- **Accounts and shared workspaces:** sign up with email and password (confirmed by email). Each account has a private workspace; invite colleagues by email to review the same shipments together. Nobody outside a workspace can see its shipments.
+- **Review team and final verdict:** workspace members appear in the reviewer dropdown on each issue, and you can add other names by hand (or switch names off). Overrides need a reason; the final verdict after review is shown on the shipment, the dashboard and the report.
+- **Queue with live progress:** checks run one at a time in arrival order. You see your place in the queue, each document's progress in percent and the estimated time left, and can cancel. A **notification** (browser push, optionally email) says when a check is done, even with the tab closed.
+- **Fair limits:** 5 checks per account per day (demos are free), at most 3 running or waiting at once. A document is stopped after 5 minutes, a check after 30 minutes, and a check waiting more than 2 hours is cancelled with the day's check given back.
+- **Deleted after 7 days:** uploaded files, results, reviews and the audit log are erased automatically, with a [privacy policy](static/privacy.html) and [terms of use](static/terms.html).
 - **Upload safety:** at most 12 files, 10 MB each and 25 pages per PDF; each file's real content is checked against its extension. Unrelated files, duplicates and documents TallyTime does not check yet (such as a bill of lading) are flagged, and unrelated files never reach the AI model.
 - **Printable review report** ending with the final verdict, an **export bar under every results tab**, and **delete uploaded files** for each shipment.
 - **REST API** with interactive documentation at `/docs`, so an ERP or a customs broker's system could submit documents directly.
@@ -69,13 +73,18 @@ ollama pull granite4:micro         # IBM Granite 4 (3B), runs on CPU
 cp .env.example .env               # defaults use the local Ollama model; no API keys needed
 ```
 
+Without email settings (`SMTP_HOST` empty), TallyTime prints each email, including the sign-up confirmation link, in the web app's terminal instead of sending it.
+
 ### 5. Run
 
+TallyTime is two processes: the web app, and the worker that reads documents. Start each in its own terminal:
+
 ```bash
-uvicorn app.main:app --port 8000
+uvicorn app.main:app --port 8000   # terminal 1: the web app
+python -m app.worker               # terminal 2: the worker (wait for "Worker ready")
 ```
 
-Open **http://localhost:8000** and click **"With planted errors"** to run the demo shipment, or drop your own documents. The API documentation is at **http://localhost:8000/docs**.
+Open **http://localhost:8000**, create an account and open the confirmation link printed in terminal 1. Then click **"With planted errors"** to run the demo shipment, or drop your own documents. The API documentation is at **http://localhost:8000/docs** (after logging in).
 
 ### 6. Run the tests
 
@@ -89,15 +98,16 @@ pytest -q
 
 ### A. Starting TallyTime each time
 
-After the one-time setup above, every session starts with three commands in a terminal, from the project folder:
+After the one-time setup above, every session starts with these commands, from the project folder:
 
 ```bash
 ollama serve &                            # 1. start the local AI model (skip if Ollama runs as a service)
 source .venv/bin/activate                 # 2. activate the Python environment
-uvicorn app.main:app --port 8000          # 3. start TallyTime
+uvicorn app.main:app --port 8000          # 3. start the web app
+python -m app.worker                      # 4. in a second terminal (after activating): start the worker
 ```
 
-Wait until the terminal prints `Application startup complete`, then open **http://localhost:8000** in a browser. Leave the terminal open; press `Ctrl+C` in it to stop TallyTime.
+Wait until the first terminal prints `Application startup complete` and the second `Worker ready`, then open **http://localhost:8000** in a browser and log in. Leave both terminals open; press `Ctrl+C` in each to stop TallyTime.
 
 > The very first document after starting takes longer (the reading models load into memory). Run one demo first if you are about to present.
 
@@ -187,44 +197,48 @@ The results are organised in tabs:
 ### E. Report, delete and start again
 
 - **Print / save report** (or **Export report (PDF)** under any tab) first asks for the report language (**English** or **മലയാളം**), then opens a report with the verdict, documents, every issue with its review decision, the checks passed and, at the end, the **final verdict** with what is still open. Choose **Save as PDF** in the print dialog. Every page carries a TallyTime header with the shipment, and a footer with the date and "Page N of M"; these replace the browser's own URL and date line.
-- **Delete uploaded files** permanently removes this shipment's files and results from the machine.
+- **Delete uploaded files** permanently removes this shipment's files and results for everyone in the workspace. Otherwise they are deleted automatically 7 days after upload; the date is shown under the verdict.
 - **New shipment** returns to the upload page.
 
 ### F. Dashboard
 
-The dashboard is on the home page, below the upload area; **Dashboard** in the top bar scrolls to it. It shows every shipment checked:
+The dashboard is on the home page, below the upload area and the queue; **Dashboard** in the top bar scrolls to it. It shows every shipment checked in your current workspace (in the last 7 days):
 
 - totals: shipments, documents read, issues caught, and how many must be fixed before filing, needed review or were ready;
 - **Which document is wrong most often**, with the team that prepares it;
 - **Most common issues**;
 - **Recent shipments**, with the verdict after review: click a row to reopen its results.
 
-History is stored in `data/tally.db` and survives restarts. Delete that file to start with an empty dashboard.
+History is stored in `data/tally.db` and survives restarts. Shipments older than 7 days are erased by the worker's hourly sweep.
 
 ### G. Using the API instead of the web page
 
-Everything the page does is available as a REST API, documented interactively at **http://localhost:8000/docs**. For example:
+Everything the page does is available as a REST API, documented interactively at **http://localhost:8000/docs** (log in first). Requests use the session cookie from logging in:
 
 ```bash
-# 1. Upload documents; returns {"id": "..."}
-curl -F "files=@invoice.pdf" -F "files=@packing_list.pdf" -F "files=@shipping_bill.pdf" \
+# 0. Log in once; the session cookie is saved in cookies.txt
+curl -c cookies.txt -H "Content-Type: application/json" \
+     -d '{"email": "you@example.com", "password": "your password"}' http://localhost:8000/api/auth/login
+
+# 1. Upload documents; returns {"id": "..."} and puts the check in the queue
+curl -b cookies.txt -F "files=@invoice.pdf" -F "files=@packing_list.pdf" -F "files=@shipping_bill.pdf" \
      http://localhost:8000/api/shipments
 
-# 2. Poll until "state" is "done"; the "report" field then holds the verdict, checks and matrix
-curl http://localhost:8000/api/shipments/<id>
+# 2. Poll until "state" is "done"; "job" shows the queue position, progress and time left,
+#    and "report" then holds the verdict, checks and matrix
+curl -b cookies.txt http://localhost:8000/api/shipments/<id>
 
 # 3. Record a review decision
-curl -X POST http://localhost:8000/api/shipments/<id>/reviews -H "Content-Type: application/json" \
+curl -b cookies.txt -X POST http://localhost:8000/api/shipments/<id>/reviews -H "Content-Type: application/json" \
      -d '{"check_id": "cross:cartons", "decision": "confirmed", "note": "Recounting", "reviewer": "Anjali, Accounts"}'
 
-# 4. Dashboard statistics
-curl http://localhost:8000/api/dashboard
+# 4. Your checks in the queue, and dashboard statistics for your workspace
+curl -b cookies.txt http://localhost:8000/api/queue
+curl -b cookies.txt http://localhost:8000/api/dashboard
 
-# 5. Which AI model is reading the documents
-curl http://localhost:8000/api/info
-
-# 6. Delete a shipment and its uploaded files
-curl -X DELETE http://localhost:8000/api/shipments/<id>
+# 5. Cancel a check, or delete a shipment and its uploaded files
+curl -b cookies.txt -X POST http://localhost:8000/api/shipments/<id>/cancel
+curl -b cookies.txt -X DELETE http://localhost:8000/api/shipments/<id>
 ```
 
 ### H. Regenerating the demo documents
@@ -240,6 +254,9 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | Problem | Fix |
 |---|---|
 | Browser says the site can't be reached | TallyTime is not running. Start it with step A and keep the terminal open. |
+| A check stays on *Waiting in the queue* | The worker is not running. Start `python -m app.worker` in a second terminal (step A). |
+| No confirmation email arrives (local) | Without `SMTP_HOST`, emails are printed in the web app's terminal: open the `#verify=` link from there. |
+| "You have used all 5 checks for today" | The daily limit resets at midnight (India time). Demo shipments still work. On a server, `python -m app.admin set-limit EMAIL N` raises it for one account. |
 | A document stays on *Reading…* or fails with "connection refused" | Ollama is not running. Run `ollama serve &` and check `curl http://localhost:11434/api/version`. |
 | `model "granite4:micro" not found` | Run `ollama pull granite4:micro`. |
 | `address already in use` when starting | Another TallyTime is running. Stop it, or start on another port: `uvicorn app.main:app --port 8001`. |
@@ -251,7 +268,7 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | A document shows as *Unrecognised* | Its title is not one TallyTime knows. Check that the document's heading says what it is (for example "Packing List"). |
 | A value is marked "check by hand" | It was not found word for word in the document (often OCR on a poor photo). Open the file from the side panel and compare. |
 | The first document is very slow | Normal: models load on first use. Later documents are faster, and repeated documents are instant. |
-| "This check was interrupted by a server restart" | TallyTime was restarted while reading. Upload the documents again. |
+| "This check was interrupted" | It was running before TallyTime had a queue. Upload the documents again. Checks interrupted now resume by themselves when the worker restarts. |
 | "… could not be read: the AI model is not running or not reachable" | Start Ollama (`ollama serve &`) and run the check again. The other documents were still checked, but the result is incomplete. |
 | "Add reviewer names in the Review team panel above" | Add at least one name at the top of the Issues tab, or untick **Record who made each decision**. |
 | The saved PDF shows a URL or "about:blank" | Your browser does not support custom print headers (older than Chrome / Edge 131). Untick **Headers and footers** in the print dialog's *More settings*. |
@@ -307,7 +324,13 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/readiness.py` | Export readiness checklist by product and destination, incentives and key dates |
 | `app/lc.py` | Letter of credit compliance checks |
 | `app/labtests.py` | Lab result screening on certificates |
-| `app/store.py` | SQLite history and dashboard statistics |
+| `app/store.py` | SQLite storage (the single source of truth, with numbered migrations) and dashboard statistics |
+| `app/accounts.py`, `app/auth.py` | Accounts, sessions, email links, workspaces and invitations; the sign-in and account API |
+| `app/jobs.py`, `app/worker.py` | The queue with daily quotas, and the worker: one check at a time, a killable reader process, timeouts |
+| `app/progress.py` | Progress and time estimates, learned from how long each stage takes on this machine |
+| `app/notify.py`, `app/mailer.py` | Web Push and email notifications; Brevo SMTP and the Turnstile bot check |
+| `app/retention.py`, `app/cache.py` | 7-day erasure of shipments and per-workspace reading caches |
+| `app/limits.py`, `app/config.py`, `app/admin.py` | Request rate limits, settings from `.env`, and the server admin command |
 | `app/uploads.py` | Upload limits and file-content validation |
 | `app/extract.py` | LLM field extraction and source-text verification |
 | `app/llm.py` | Provider switch: local Ollama (default) or IBM watsonx; names the model for the header badge |
@@ -315,10 +338,11 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/rules.py` | Rule engine and document hierarchy |
 | `app/report.py` | Verdict, final verdict after review, Truth Matrix, document checklist |
 | `app/pipeline.py` | Per-file pipeline; caches by file hash and by document text |
-| `app/main.py` | FastAPI backend |
-| `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `ml.js` holds the Malayalam wording |
+| `app/main.py` | FastAPI backend: uploads, results, reviews, the live queue (server-sent events), security headers |
+| `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `session.js` handles accounts, the queue and notifications, `sw.js` shows push notifications, `ml.js` holds the Malayalam wording; `privacy.html`, `terms.html` |
+| `deploy/`, `DEPLOY.md` | Server setup for the public site: Caddy, systemd services, backups |
 | `tools/make_demo_docs.py` | Generates the synthetic demo shipment |
-| `tests/` | 17 tests on recorded model output: rules, normalisation, LC, lab results, uploads, final verdict |
+| `tests/` | 57 tests: rules, normalisation, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts and retention |
 | `data/demo/` | The synthetic demo shipments (seven sets) |
 | `data/cache/`, `data/uploads/`, `data/tally.db` | Created at run time: reading cache, uploaded files and shipment history. Not in the repository. |
 
@@ -335,7 +359,27 @@ Settings live in `.env` (copy it from `.env.example`). The defaults need no chan
 | `OLLAMA_MODEL` | `granite4:micro` | The local model. All measurements in this README use `granite4:micro`; other Ollama models can be set here but were not tested. |
 | `WATSONX_API_KEY`, `WATSONX_PROJECT_ID`, `WATSONX_URL`, `WATSONX_MODEL` | (placeholders) | Only used when `LLM_PROVIDER=watsonx`. Document text is then sent to IBM's cloud, and the header badge says so. |
 
-Restart TallyTime after changing `.env`.
+The public deployment adds settings for the site address, limits, email, the bot check and push notifications. They are all listed, with their defaults, in `.env.example`:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PUBLIC_URL` | `http://localhost:8000` | Address used in email links; `https://` turns on secure cookies |
+| `DAILY_SHIPMENTS` | `5` | Checks per account per day (demos do not count) |
+| `MAX_ACTIVE_PER_USER` | `3` | Checks one account can have running or waiting at once |
+| `DOC_TIMEOUT`, `SHIPMENT_TIMEOUT`, `QUEUE_TIMEOUT` | `300`, `1800`, `7200` | Seconds before a document, a running check, or a waiting check is stopped |
+| `RETENTION_DAYS` | `7` | Days before uploads, results, reviews and the audit log are erased |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | empty | Brevo SMTP relay. Empty: emails are printed to the log |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | empty | Cloudflare Turnstile on sign-up and password reset. Empty: no bot check |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | empty | Web Push keys from `python -m app.notify keys`. Empty: notifications only while a tab is open |
+
+Restart TallyTime (both processes) after changing `.env`.
+
+---
+
+## Public deployment
+
+TallyTime is set up to run publicly at **https://tallytime.akashanil.dev** on an Oracle Cloud Always Free Ampere VM (4 ARM cores, 24 GB RAM): Caddy for HTTPS,
+the web app, one worker and Ollama on the same machine, with SQLite. [DEPLOY.md](DEPLOY.md) has the full steps, from DNS and Brevo to backups.
 
 ---
 
@@ -368,7 +412,8 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 - **AI reads, rules judge.** The model never decides pass or fail. Rules are plain Python in `app/rules.py`.
 - **Human in the loop.** Every flag can be confirmed or overridden. An override requires a note, and every decision is logged with the reviewer's name (unless names are switched off) and the time. The report and dashboard show the verdict after review, never hiding what was overridden.
 - **Local by default.** Documents are parsed and read on the machine running TallyTime. Nothing is sent to an external service unless `LLM_PROVIDER=watsonx` is set.
-- **Data minimisation.** Email addresses and phone numbers are masked before text is stored or sent to the model (in the spirit of India's DPDP Act 2023). Uploaded files can be deleted from the results screen.
+- **Data minimisation.** Email addresses and phone numbers are masked before text is stored or sent to the model (in the spirit of India's DPDP Act 2023). Uploaded files, results, reviews and the audit log are erased after 7 days, or at once from the results screen; deleting an account erases its workspace's shipments immediately. Backups hold account details only.
+- **Private by workspace.** Every request checks that the person belongs to the shipment's workspace, and anyone else gets the same "not found" as for a shipment that does not exist. Reading caches are kept per workspace, so one customer's upload is never served to another. Passwords are hashed with Argon2; emailed links are single-use, expire, and carry their token after `#` so it never reaches server logs.
 - **Safe uploads.** File size, count and page limits; each file's content is checked against its type; file names are cleaned, and only the shipment's own files can be opened.
 - **Not legal advice.** TallyTime is decision support; a licensed customs broker makes the final call.
 
@@ -380,8 +425,8 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 - Very blurred or dark photos may be misread; photos are straightened, but not perspective-corrected.
 - An Excel workbook with several documents on different sheets is read as one document.
 - Extraction takes about a minute per document on a laptop CPU; a GPU or IBM watsonx would cut this to seconds.
-- Single process with SQLite; a production deployment would add user accounts, Postgres and a job queue with several workers.
-- No user accounts: anyone who can open TallyTime can see every shipment, and reviewer names are remembered per browser.
+- One worker on one machine, with SQLite. Several workers on other machines (for example GPU servers) would need Postgres in place of SQLite; the storage code is all in `app/store.py`.
+- Names typed into the review team (people who are not workspace members) are remembered per browser.
 - Dates like `03/04/2026` are read the Indian way (3 April). An invoice with several product lines is checked on its totals, not line by line. In a merged PDF, a page without a title is treated as part of the document before it.
 
 See [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for third-party software, models and AI assistance.

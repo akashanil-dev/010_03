@@ -1,0 +1,30 @@
+# TallyTime behind Caddy: automatic HTTPS (Let's Encrypt), HSTS, upload size limit.
+# The app itself sets the Content-Security-Policy and other security headers.
+# Installed to /etc/caddy/Caddyfile by deploy/setup.sh. Replace the domain if yours differs.
+
+tallytime.akashanil.dev {
+	encode zstd gzip
+
+	# 12 files x 10 MB, plus form overhead
+	request_body {
+		max_size 130MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Access logs (IP, time, path; Caddy never logs cookies), kept 30 days as the privacy policy says
+	log {
+		output file /var/log/caddy/tallytime.log {
+			roll_size 50MiB
+			roll_keep_for 720h
+		}
+	}
+
+	# flush_interval -1 streams the live queue updates (server-sent events) immediately
+	reverse_proxy 127.0.0.1:8000 {
+		flush_interval -1
+	}
+}

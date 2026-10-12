@@ -20,7 +20,19 @@
 | [Pillow](https://python-pillow.org) | Simulated scan for the demo set | MIT-CMU |
 | [IBM watsonx.ai SDK](https://pypi.org/project/ibm-watsonx-ai/) | Optional cloud provider | BSD-3 |
 | python-dotenv, pytest | Configuration, tests | BSD-3, MIT |
+| [argon2-cffi](https://argon2-cffi.readthedocs.io) | Password hashing | MIT |
+| [pywebpush](https://github.com/web-push-libs/pywebpush) | Browser push notifications | MPL-2.0 |
+| [Caddy](https://caddyserver.com) | HTTPS reverse proxy on the public server | Apache 2.0 |
 | [Wikimedia Codex](https://doc.wikimedia.org/codex/) design language | The interface's visual style (colours, spacing, components) was written by hand following Codex's published design tokens and guidelines; no Codex code is included | Design reference |
+
+## Services used by the public deployment
+
+| Service | Use |
+|---|---|
+| Oracle Cloud Infrastructure (Always Free) | Hosting |
+| [Brevo](https://www.brevo.com) | Sending account and notification emails |
+| [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/) | Bot check on sign-up and password reset |
+| Let's Encrypt (through Caddy) | HTTPS certificate |
 
 ## Data
 

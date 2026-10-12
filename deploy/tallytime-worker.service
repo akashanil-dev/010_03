@@ -1,0 +1,23 @@
+[Unit]
+Description=TallyTime worker (reads documents, one check at a time)
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+User=tallytime
+Group=tallytime
+WorkingDirectory=/opt/tallytime
+ExecStart=/opt/tallytime/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=5
+# Leave room for Ollama and the web app if a document makes Docling balloon
+MemoryMax=14G
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tallytime/data /opt/tallytime/.cache
+
+[Install]
+WantedBy=multi-user.target
