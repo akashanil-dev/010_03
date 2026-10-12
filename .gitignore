@@ -8,3 +8,4 @@ data/cache/
 data/tally.db*
 data/worker.heartbeat
 data/*.log
+*.local.md
