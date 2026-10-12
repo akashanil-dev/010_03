@@ -166,8 +166,63 @@ def cross_document(docs: list[ParsedDocument]) -> list[Check]:
         checks.append(Check(id=f"cross:{key}", category="cross-document", title=f"{label} mismatch", field=key,
                             status=severity, message=message, suggestion=suggestion, values=values))
     checks.append(description_check(docs))
+    checks.append(quantity_check(docs))
     _explain_swapped_references(checks)
     return checks
+
+
+def _quantity(doc: ParsedDocument) -> tuple[str, float, N.Unit | None] | None:
+    """(field it came from, amount, unit) of the goods on a PO or invoice. Readings without a quantity fall back to
+    the net weight, since such goods are sold by weight."""
+    g = _getter(doc)
+    qty = N.number(g("quantity"))
+    if qty is not None:
+        return "quantity", qty, N.unit(g("quantity_unit")) or N.unit(g("quantity"))
+    kg = N.weight_kg(g("net_weight"), g("net_weight_unit"))
+    return ("net_weight", kg, N.UNIT_WORDS["kg"]) if kg is not None else None
+
+
+def _show_qty(amount: float, unit: N.Unit | None) -> str:
+    return f"{_fmt_num(amount)} {unit.label}" if unit else _fmt_num(amount)
+
+
+def quantity_check(docs: list[ParsedDocument]) -> Check:
+    """The invoiced quantity against the quantity ordered on the PO, in whatever units each states it."""
+    po, inv = _by_type(docs, "purchase_order"), _by_type(docs, "commercial_invoice")
+    base = dict(id="cross:quantity", category="cross-document", field="quantity")
+    ordered, billed = (_quantity(po) if po else None), (_quantity(inv) if inv else None)
+    if not ordered or not billed:
+        return Check(**base, title="Invoiced quantity matches the PO", status="skipped",
+                     message="The quantity could not be read from both the purchase order and the invoice.")
+    (po_key, po_qty, po_unit), (inv_key, inv_qty, inv_unit) = ordered, billed
+    if po_unit and inv_unit and po_unit.dim != inv_unit.dim:
+        po_kg, inv_kg = (N.weight_kg(_getter(d)("net_weight"), _getter(d)("net_weight_unit")) for d in (po, inv))
+        if po_kg is None or inv_kg is None:
+            return Check(**base, title="Invoiced quantity matches the PO", status="skipped",
+                         message=f"The purchase order counts in {po_unit.label} and the invoice in {inv_unit.label}, "
+                                 "so the quantities cannot be compared.")
+        (po_key, po_qty, po_unit), (inv_key, inv_qty, inv_unit) = (
+            ("net_weight", po_kg, N.UNIT_WORDS["kg"]), ("net_weight", inv_kg, N.UNIT_WORDS["kg"]))
+    unit = po_unit or inv_unit   # a quantity without a unit is taken to be in the other document's unit
+    factor = lambda u: (u or unit).factor if (u or unit) else 1
+    po_base, inv_base = po_qty * factor(po_unit), inv_qty * factor(inv_unit)
+    values = [_value(po, po_key, _show_qty(po_qty, po_unit or unit)), _value(inv, inv_key, _show_qty(inv_qty, inv_unit or unit))]
+    if _num_eq(po_base, inv_base):
+        return Check(**base, title="Invoiced quantity matches the PO", status="pass", values=values,
+                     message=f"The invoice bills {values[1].display}, as ordered.")
+    values[1].outlier = True
+    diff = abs(inv_base - po_base) / po_base * 100 if po_base else 0
+    if inv_base > po_base:
+        return Check(**base, title="Invoice bills more than was ordered", status="error", values=values,
+                     message=f"The invoice bills {values[1].display}, but the purchase order is for {values[0].display} "
+                             f"({diff:.1f}% more).",
+                     suggestion="Correct the invoice, or get the buyer's written agreement (an amended PO) before "
+                                "shipping more than ordered. Under a letter of credit, the bank will refuse it.")
+    return Check(**base, title="Invoice bills less than was ordered", status="warning", values=values,
+                 message=f"The invoice bills {values[1].display}, but the purchase order is for {values[0].display} "
+                         f"({diff:.1f}% less).",
+                 suggestion="If this is a partial shipment, confirm the purchase order (and the letter of credit, if any) "
+                            "allows partial shipments. Otherwise correct the invoice.")
 
 
 def _explain_swapped_references(checks: list[Check]) -> None:

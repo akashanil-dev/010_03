@@ -3,6 +3,7 @@
 // Document names and trade terms stay in English, as they are used in practice.
 
 const ML_FIELDS = {
+  quantity: "അളവ്",
   cartons: "കാർട്ടണുകളുടെ എണ്ണം",
   net_weight: "നെറ്റ് വെയ്റ്റ്",
   gross_weight: "ഗ്രോസ് വെയ്റ്റ്",
@@ -23,6 +24,13 @@ const ML_FIELDS = {
 function mlMessage(c) {
   const out = (c.values || []).filter((v) => v.outlier);
   const ref = (c.values || []).find((v) => !v.outlier);
+  if (c.id === "cross:quantity") {
+    const [po, inv] = c.values || [];
+    if (!po || !inv) return null;
+    return c.status === "error"
+      ? `Invoice-ൽ ${inv.display} ബിൽ ചെയ്തിട്ടുണ്ട്, പക്ഷേ PO-യിൽ ഓർഡർ ചെയ്തത് ${po.display} മാത്രമാണ്. ഓർഡറിലും കൂടുതൽ അയക്കാൻ buyer-ന്റെ രേഖാമൂലമുള്ള സമ്മതം (പുതുക്കിയ PO) വേണം.`
+      : `Invoice-ൽ ${inv.display} മാത്രമേ ബിൽ ചെയ്തിട്ടുള്ളൂ, PO-യിൽ ${po.display} ഓർഡർ ചെയ്തിട്ടുണ്ട്. ഇത് partial shipment ആണെങ്കിൽ PO-യും LC-യും അത് അനുവദിക്കുന്നുണ്ടോ എന്ന് ഉറപ്പാക്കുക.`;
+  }
   if (c.id === "cross:description") {
     const v = out[0];
     return v ? `${v.doc_name}-ലെ ചരക്കിന്റെ വിവരണം വളരെ ചുരുക്കമാണ് ("${v.raw}"). കൂടുതൽ വിശദമായ വിവരണം വേണോ എന്ന് തീരുമാനിക്കുക.` : null;

@@ -4,7 +4,7 @@ from . import readiness, rules
 from .normalize import reference
 from .schemas import DOC_TYPES, FIELDS, HIERARCHY, OWNERS, ParsedDocument
 
-MATRIX_FIELDS = ["cartons", "net_weight", "gross_weight", "hs_code", "exporter_name", "consignee_name",
+MATRIX_FIELDS = ["quantity", "cartons", "net_weight", "gross_weight", "hs_code", "exporter_name", "consignee_name",
                  "port_of_loading", "port_of_discharge", "incoterms", "fob_value", "invoice_ref", "po_ref",
                  "container_no", "description", "doc_date"]
 

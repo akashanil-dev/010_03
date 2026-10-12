@@ -280,8 +280,8 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 
 | Kind | Checks |
 |---|---|
-| **Across documents** | cartons, net and gross weight, HS code, exporter, consignee, IEC, GSTIN, ports of loading and discharge, Incoterms, container, FOB value, invoice and PO references, goods description (fuzzy match, warning only) |
-| **Within a document** | invoice: quantity × rate = total, total − freight = FOB; packing list: cartons × weight per carton = total weight |
+| **Across documents** | quantity invoiced against quantity ordered on the PO (more than ordered is an error; less is a warning, as it may be a partial shipment; units are converted, e.g. 400 dozen = 4,800 pcs), cartons, net and gross weight, HS code, exporter, consignee, IEC, GSTIN, ports of loading and discharge, Incoterms, container, FOB value, invoice and PO references, goods description (fuzzy match, warning only) |
+| **Within a document** | invoice: quantity × rate = total, in the unit the goods are priced per (kg, MT, piece, dozen, pair, metre, m², carton…), total − freight = FOB; packing list: cartons × weight per carton = total weight |
 | **Compliance** | required documents present; LUT ARN on the invoice when the shipping bill declares export under LUT; date order (PO ≤ invoice ≤ shipping bill, invoice ≤ certificate of origin) |
 | **Letter of credit** | amount and tolerance, currency, latest shipment date, presentation deadline and expiry, ports, Incoterms, invoice description, beneficiary and applicant, required documents |
 | **Lab results** | banned antibiotics detected, ethylene oxide above the EU limit |
@@ -343,7 +343,7 @@ PDF ──► Docling (layout, tables, OCR)
 | `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `session.js` handles accounts, the queue and notifications, `sw.js` shows push notifications, `ml.js` holds the Malayalam wording; `privacy.html`, `terms.html` |
 | `deploy/`, `DEPLOY.md` | Server setup for the public site: Caddy, systemd services, backups |
 | `tools/make_demo_docs.py`, `tools/make_coir_demo.py` | Generate the synthetic demo shipments (frozen shrimp; coir mats priced per piece) |
-| `tests/` | 111 tests: rules, normalisation, pricing units, product profiles, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts, retention and the resource meters |
+| `tests/` | 120 tests: rules, normalisation, pricing units, ordered vs invoiced quantity, product profiles, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts, retention and the resource meters |
 | `data/demo/` | The synthetic demo shipments (eight sets) |
 | `data/cache/`, `data/uploads/`, `data/tally.db` | Created at run time: reading cache, uploaded files and shipment history. Not in the repository. |
 
@@ -390,14 +390,14 @@ The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six docu
 
 | Set | Result |
 |---|---|
-| Clean | Ready. 0 false flags (25 of 25 evaluated checks pass) |
+| Clean | Ready. 0 false flags (26 of 26 evaluated checks pass) |
 | Errors | Fix before filing. **8 of 8** planted issues caught (7 errors + 1 warning), plus the packing-list arithmetic error that follows from the wrong carton count. The 3 format traps are not flagged. |
 | Errors + scanned packing list | Same result as the errors set; OCR read the scan correctly |
 | Mixed formats (Excel invoice, phone-photo packing list tilted 3.5°, PDFs) | Same result: **8 of 8** caught. Without automatic straightening the tilted photo lost the carton error; with it every field was read correctly. |
 | All six documents in one merged PDF | Split into the six documents by page titles; same result |
 | Clean set + letter of credit | Documents agree with each other, yet **both planted LC breaches are caught**: shipment after the LC's latest date, and size 26/30 in the LC vs 31/40 on the invoice |
 | Lab certificate reporting a nitrofuran | Errors-set issues plus **"Banned antibiotic residue detected"**; the "not detected" chloramphenicol line correctly passes |
-| Coir door mats, priced per piece (separate shipment, Alappuzha to Hamburg) | **Exactly 1 error**, the planted invoice total, worked out per piece (4,800 pcs × 3.25), and 24 of 25 checks pass. Detected as coir from the HS code, Coir Board registration found on the invoice, no health certificate expected. Read per piece, not per kg (7,680 kg × 3.25 would have looked badly wrong). |
+| Coir door mats, priced per piece (separate shipment, Alappuzha to Hamburg) | **Exactly 1 error**, the planted invoice total, worked out per piece (4,800 pcs × 3.25), and 25 of 26 checks pass, including the invoiced quantity against the PO. Detected as coir from the HS code, Coir Board registration found on the invoice, no health certificate expected. Read per piece, not per kg (7,680 kg × 3.25 would have looked badly wrong). |
 | Fresh install | A clean clone following this README caught the same 8 of 8 with no cache |
 | Automated tests | `pytest -q`: 17 passed |
 | Extraction time | 35–109 s per new document (mean 73 s) on CPU. Documents seen before load instantly from the cache. |

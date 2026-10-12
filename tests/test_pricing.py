@@ -97,3 +97,52 @@ def test_source_check_accepts_other_number_formats_and_units():
     assert locate("per piece", text, unit=True)[1] and locate("KGS", text, unit=True)[1]
     assert not locate("15500.00", text)[1]                 # a number the document does not contain
     assert not locate("per dozen", text, unit=True)[1]     # a unit the document does not use
+
+
+def quantity_check(po, inv):
+    from app.rules import quantity_check as check
+    return check(make_docs({"purchase_order": po, "commercial_invoice": inv}))
+
+
+def test_quantity_as_ordered():
+    c = quantity_check({"quantity": "4,800", "quantity_unit": "PCS"}, {"quantity": "4800", "quantity_unit": "Pcs"})
+    assert c.status == "pass" and "4,800 pcs" in c.message
+
+
+def test_invoiced_more_than_ordered_is_an_error():
+    c = quantity_check({"quantity": "4,800", "quantity_unit": "PCS"}, {"quantity": "5,000", "quantity_unit": "PCS"})
+    assert c.status == "error" and "5,000 pcs" in c.message and "4,800 pcs" in c.message and "4.2% more" in c.message
+    assert [v.outlier for v in c.values] == [False, True]   # the PO is the reference
+
+
+def test_invoiced_less_is_a_partial_shipment_warning():
+    c = quantity_check({"quantity": "4,800", "quantity_unit": "PCS"}, {"quantity": "4,500", "quantity_unit": "PCS"})
+    assert c.status == "warning" and "partial shipment" in c.suggestion
+
+
+def test_quantities_in_different_but_compatible_units():
+    assert quantity_check({"quantity": "4,800", "quantity_unit": "PCS"},
+                          {"quantity": "400", "quantity_unit": "DOZ"}).status == "pass"
+    assert quantity_check({"quantity": "12", "quantity_unit": "MT"},
+                          {"quantity": "12,000", "quantity_unit": "KGS"}).status == "pass"
+
+
+def test_a_unit_on_one_document_is_assumed_for_the_other():
+    assert quantity_check({"quantity": "4,800", "quantity_unit": "PCS"}, {"quantity": "4,800"}).status == "pass"
+
+
+def test_without_quantities_the_net_weights_are_compared():
+    c = quantity_check({"net_weight": "12,000", "net_weight_unit": "kg"}, {"net_weight": "12.5", "net_weight_unit": "MT"})
+    assert c.status == "error" and "12,500 kg" in c.message
+
+
+def test_pieces_against_kilos_fall_back_to_net_weight_or_skip():
+    po, inv = {"quantity": "4,800", "quantity_unit": "PCS"}, {"quantity": "7,680", "quantity_unit": "KGS"}
+    assert quantity_check(po, inv).status == "skipped"
+    both = quantity_check(po | {"net_weight": "7,680", "net_weight_unit": "kg"}, inv | {"net_weight": "7,680", "net_weight_unit": "kg"})
+    assert both.status == "pass"
+
+
+def test_quantity_needs_both_documents():
+    from app.rules import quantity_check as check
+    assert check(make_docs({"commercial_invoice": {"quantity": "10"}})).status == "skipped"

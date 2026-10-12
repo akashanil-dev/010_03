@@ -87,3 +87,14 @@ def test_coir_demo_gives_exactly_its_planted_pricing_error():
     assert "4,800 pcs × 3.25 = 15,600" in flags["math:invoice"]["message"]
     assert rep["readiness"]["product"] == "coir"
     assert "Quality / Health Certificate" not in [c["doc_name"] for c in rep["coverage"]]
+
+
+def test_coir_demo_quantity_matches_and_shows_in_the_matrix():
+    from app.report import build as build_report
+    from tests.fixtures import coir_docs
+
+    rep = build_report(coir_docs())
+    q = next(c for c in rep["checks"] if c["id"] == "cross:quantity")
+    assert q["status"] == "pass" and "4,800 pcs" in q["message"]
+    row = next(r for r in rep["matrix"]["rows"] if r["key"] == "quantity")
+    assert set(row["cells"]) == {"purchase_order", "commercial_invoice"}
