@@ -1,6 +1,6 @@
 # TallyTime: Export Document Verification
 
-**KeralAI Grand Challenge 2026 · Team 10 · Challenge 3: Export Document Verification System**
+**KeralAI Grand Challenge 2026 · Team Ayalvasis (Team 10) · Akash A · Challenge 3: Export Document Verification System**
 
 TallyTime reads the documents of an export shipment (purchase order, commercial invoice, packing list, shipping bill, quality / health certificate, certificate of origin and, optionally, the letter of credit), compares every shared fact across them and flags discrepancies **before** the shipment reaches customs or the buyer's bank. Every flag shows the exact source text it is based on, and a person confirms or overrides it.
 
