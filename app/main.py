@@ -30,7 +30,7 @@ UPLOADS = retention.UPLOADS
 DEMO = ROOT / "data" / "demo"
 STATIC = ROOT / "static"
 HEARTBEAT = ROOT / "data" / "worker.heartbeat"
-DEMOS = ("clean", "errors", "scanned", "bundle", "mixed", "quality", "lc")
+DEMOS = ("clean", "errors", "scanned", "bundle", "mixed", "quality", "lc", "coir")
 DEMO_SECONDS = 3
 
 CSP = ("default-src 'self'; script-src 'self' https://challenges.cloudflare.com; "

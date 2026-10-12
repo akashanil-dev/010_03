@@ -13,11 +13,12 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **Upload in any common format:** PDF (digital or scanned), photos (JPG, PNG, TIFF; tilted photos are straightened automatically), Excel, Word and CSV. Separate files or **one merged PDF** of the whole set, which is split into documents automatically.
 - **Shipment Truth Matrix:** every shared field across every document on one screen; the likely wrong value is highlighted; click a value to see the exact text it was read from.
 - **Issues with evidence:** plain-English explanation, suggested fix, each document's value and source text; **confirm or override** with a note (overrides require one), recorded in an **audit log**.
-- **Export readiness checklist:** product detected from the HS code, destination from the port. Checks core documents, IEC, GSTIN, LUT reference and its financial year, MPEDA registration, and the EIC health certificate for seafood to the EU. Uncertain items are marked *check* rather than asserted.
+- **For any exporter, with Kerala's main products built in:** the cross-document, letter of credit, tax and deadline checks work for any goods. Invoice arithmetic follows how the goods are priced: per kg, tonne, piece, dozen, pair, set, metre, square metre or carton.
+- **Export readiness checklist:** product detected from the HS code, destination from the port. Checks core documents, IEC, GSTIN, and the LUT reference and its financial year for every shipment, plus each product's own requirements: seafood (MPEDA registration, EIC health certificate for the EU, farm traceability), spices (Spices Board, phytosanitary certificate), tea (Tea Board), coffee (Coffee Board, EUDR), cashew (CEPCI), coir (Coir Board, fumigation) and natural rubber (Rubber Board, EUDR). A quality or health certificate is expected only for food. Uncertain items are marked *check* rather than asserted.
 - **Letter of credit compliance (UCP 600):** upload the LC and TallyTime checks the whole set against its terms before it goes to the bank: amount within the credit plus tolerance, shipment by the latest shipment date, presentation deadline, ports, Incoterms, invoice description corresponding with the credit, beneficiary/applicant, and the documents the LC requires. A set that agrees with itself can still break the LC; this catches that.
 - **Lab result screening:** reads the results on quality / health certificates. A detected banned antibiotic (chloramphenicol, nitrofurans and their metabolites, malachite green) or ethylene oxide above the EU limit of 0.1 mg/kg is flagged as a blocking error. Plain rules, no AI.
 - **Money and deadlines:** flags a shipping bill that claims no RoDTEP or drawback (the claim must be made on the shipping bill), and shows the 3-month amendment window and the 15-month export-proceeds deadline.
-- **New rules for Kerala products:** EUDR due diligence for natural rubber to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
+- **New rules for Kerala products:** EUDR due diligence for natural rubber and coffee to the EU (30 Dec 2026 / 30 Jun 2027) and farm traceability for seafood, shown as items to check.
 - **Send fixes to the right team:** issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker, documentation) with one-tap **WhatsApp**, email or copy.
 - **Malayalam:** issue text, fix messages and the exported report can be in Malayalam for warehouse and floor staff (the original English stays alongside each issue).
 - **Summary dashboard:** shipments checked, ready / needs review / fix before filing, the most common issues, and **which document and team causes the most errors**, for your workspace. History is stored in SQLite.
@@ -121,6 +122,7 @@ The home page has a **Try a demo shipment** panel on the right. Each button load
 | **Clean set + letter of credit** | Documents that agree with each other, plus an LC they break | FIX BEFORE FILING, from 2 LC issues: late shipment, different size |
 | **Lab certificate with a failed test** | A quality certificate reporting a banned antibiotic | FIX BEFORE FILING, including "Banned antibiotic residue detected" |
 | **Clean shipment** | Everything consistent | READY TO FILE: no issues |
+| **Coir door mats, priced per piece** | Five documents for 4,800 coir mats at $3.25 each, Alappuzha to Hamburg | FIX BEFORE FILING: exactly 1 error, "4,800 pcs × 3.25 = 15,600, but the invoice total is 15,060" |
 
 A demo that has run once before loads instantly from the cache. Reading a set for the very first time takes about a minute per document on a laptop CPU.
 
@@ -241,7 +243,8 @@ curl -b cookies.txt -X DELETE http://localhost:8000/api/shipments/<id>
 ### H. Regenerating the demo documents
 
 ```bash
-python tools/make_demo_docs.py
+python tools/make_demo_docs.py    # the frozen shrimp sets
+python tools/make_coir_demo.py    # the coir mats set
 ```
 
 This rewrites everything in `data/demo/`. The rewritten files are new to the cache, so the first demo run afterwards reads every document again (about a minute each).
@@ -339,9 +342,9 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/main.py` | FastAPI backend: uploads, results, reviews, the live queue (server-sent events), security headers |
 | `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `session.js` handles accounts, the queue and notifications, `sw.js` shows push notifications, `ml.js` holds the Malayalam wording; `privacy.html`, `terms.html` |
 | `deploy/`, `DEPLOY.md` | Server setup for the public site: Caddy, systemd services, backups |
-| `tools/make_demo_docs.py` | Generates the synthetic demo shipment |
-| `tests/` | 62 tests: rules, normalisation, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts, retention and the resource meters |
-| `data/demo/` | The synthetic demo shipments (seven sets) |
+| `tools/make_demo_docs.py`, `tools/make_coir_demo.py` | Generate the synthetic demo shipments (frozen shrimp; coir mats priced per piece) |
+| `tests/` | 111 tests: rules, normalisation, pricing units, product profiles, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts, retention and the resource meters |
+| `data/demo/` | The synthetic demo shipments (eight sets) |
 | `data/cache/`, `data/uploads/`, `data/tally.db` | Created at run time: reading cache, uploaded files and shipment history. Not in the repository. |
 
 ---
@@ -394,13 +397,14 @@ The demo is a synthetic frozen-shrimp shipment from Kochi to Rotterdam: six docu
 | All six documents in one merged PDF | Split into the six documents by page titles; same result |
 | Clean set + letter of credit | Documents agree with each other, yet **both planted LC breaches are caught**: shipment after the LC's latest date, and size 26/30 in the LC vs 31/40 on the invoice |
 | Lab certificate reporting a nitrofuran | Errors-set issues plus **"Banned antibiotic residue detected"**; the "not detected" chloramphenicol line correctly passes |
+| Coir door mats, priced per piece (separate shipment, Alappuzha to Hamburg) | **Exactly 1 error**, the planted invoice total, worked out per piece (4,800 pcs × 3.25), and 24 of 25 checks pass. Detected as coir from the HS code, Coir Board registration found on the invoice, no health certificate expected. Read per piece, not per kg (7,680 kg × 3.25 would have looked badly wrong). |
 | Fresh install | A clean clone following this README caught the same 8 of 8 with no cache |
 | Automated tests | `pytest -q`: 17 passed |
 | Extraction time | 35–109 s per new document (mean 73 s) on CPU. Documents seen before load instantly from the cache. |
 
 These are synthetic documents written by the team, so this shows the pipeline works. It is **not** a measure of real-world accuracy.
 
-To regenerate the demo PDFs: `python tools/make_demo_docs.py`
+To regenerate the demo PDFs: `python tools/make_demo_docs.py` (frozen shrimp sets) and `python tools/make_coir_demo.py` (coir set)
 
 ---
 
@@ -418,7 +422,7 @@ To regenerate the demo PDFs: `python tools/make_demo_docs.py`
 ## Limitations
 
 - Tested only on the team's synthetic documents; real-world accuracy is unmeasured.
-- Six document types; the readiness checklist is most detailed for seafood.
+- Six document types. Product-specific checks cover seven Kerala products (seafood, spices, tea, coffee, cashew, coir, natural rubber); other goods get the general checks only.
 - **Handwriting is not supported reliably:** the OCR is trained on printed text and the model reads text only. Values not found word for word are marked "check by hand", and every flag shows its source for a person to confirm.
 - Very blurred or dark photos may be misread; photos are straightened, but not perspective-corrected.
 - An Excel workbook with several documents on different sheets is read as one document.

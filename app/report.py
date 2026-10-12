@@ -75,8 +75,9 @@ def final_verdict(report: dict, reviews: dict) -> dict:
 def coverage(docs: list[ParsedDocument]) -> list[dict]:
     """Which expected document types are present: required ones block filing, the others are expected."""
     present = {d.doc_type for d in docs if d.doc_type}
-    order = ["purchase_order", "commercial_invoice", "packing_list", "shipping_bill", "health_certificate",
-             "certificate_of_origin"]
+    expected = rules.recommended(docs)
+    order = [t for t in ("purchase_order", "commercial_invoice", "packing_list", "shipping_bill", "health_certificate",
+                         "certificate_of_origin") if t != "health_certificate" or t in expected]
     out = [{"doc_type": t, "doc_name": DOC_TYPES[t], "present": t in present, "required": t in rules.REQUIRED}
            for t in order]
     if "letter_of_credit" in present:

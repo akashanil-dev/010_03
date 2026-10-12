@@ -227,41 +227,81 @@ def _by_type(docs, doc_type):
     return next((d for d in docs if d.doc_type == doc_type), None)
 
 
+def _invoice_quantities(g) -> tuple[list[tuple[float, str]], bool, str | None]:
+    """How to read "quantity × unit price = total" on an invoice.
+
+    Returns the quantity expressed in the unit the price is charged per (with that unit's label) for each plausible
+    reading, whether the price basis is certain, and a reason when the check cannot run. Goods may be priced per kg,
+    MT, piece, dozen, pair, set, metre, m² or package. Readings made before quantities were extracted have no
+    quantity and are taken as priced per kg, as they always were.
+    """
+    qty = N.number(g("quantity"))
+    qty_unit = N.unit(g("quantity_unit")) or N.unit(g("quantity"))
+    basis = N.unit(g("price_unit")) or qty_unit
+    net_kg = N.weight_kg(g("net_weight"), g("net_weight_unit"))
+    if basis is None:
+        if qty is None:
+            return ([(net_kg, "kg")] if net_kg is not None else []), True, None
+        return [(qty, "units")] + ([(net_kg, "kg")] if net_kg is not None else []), False, None
+    if basis.dim == "weight":
+        kg = qty * qty_unit.factor if qty is not None and qty_unit and qty_unit.dim == "weight" else net_kg
+        return ([(kg / basis.factor, basis.label)] if kg is not None else []), True, None
+    if qty is not None and qty_unit and qty_unit.dim != basis.dim:
+        per = {"pcs": "piece", "pairs": "pair", "sets": "set", "packages": "package"}.get(basis.label, basis.label)
+        return [], True, (f"The quantity is in {qty_unit.label} but the price is per {per}, "
+                          "so the total cannot be recomputed. Check it by hand.")
+    if qty is not None:
+        return [(qty * (qty_unit or basis).factor / basis.factor, basis.label)], True, None
+    if basis.dim == "package" and N.count(g("cartons")) is not None:
+        return [(N.count(g("cartons")), basis.label)], True, None
+    return [], True, None
+
+
 def arithmetic(docs: list[ParsedDocument]) -> list[Check]:
     checks = []
     inv = _by_type(docs, "commercial_invoice")
     if inv:
         g = _getter(inv)
-        qty, rate, total = N.weight_kg(g("net_weight"), g("net_weight_unit")), N.number(g("unit_price")), N.number(g("total_amount"))
+        rate, total = N.number(g("unit_price")), N.number(g("total_amount"))
         freight, fob = N.number(g("freight")), N.number(g("fob_value"))
-        values = [_value(inv, k, g(k)) for k in ("net_weight", "unit_price", "total_amount", "freight", "fob_value")]
+        keys = [k for k in ("quantity", "net_weight", "unit_price", "price_unit", "total_amount", "freight", "fob_value")
+                if k not in ("quantity", "price_unit") or g(k)]
+        values = [_value(inv, k, g(k)) for k in keys]
+        candidates, strict, why = _invoice_quantities(g)
         hs_codes = set(re.findall(r"\b\d{8}\b", inv.text or ""))
         if len(hs_codes) > 1:
             checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
                                 status="skipped", message=f"The invoice has several product lines ({len(hs_codes)} HS codes); "
                                 "line-by-line totals are not recomputed yet."))
-        elif None in (qty, rate, total):
+        elif why:
+            checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
+                                status="skipped", values=values, message=why))
+        elif not candidates or None in (rate, total):
             checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
                                 status="skipped", message="Quantity, rate or total could not be read."))
         else:
-            expected = qty * rate
-            problems = []
-            if not _num_eq(expected, total):
-                problems.append(f"{_fmt_num(qty)} kg × {_fmt_num(rate)} = {_fmt_num(expected)}, but the invoice total is {_fmt_num(total)}")
-            if freight is not None and fob is not None and not _num_eq(total - freight, fob):
+            match = next(((q, u) for q, u in candidates if _num_eq(q * rate, total)), None)
+            qty, unit = match or candidates[0]
+            problems, fob_wrong = [], freight is not None and fob is not None and not _num_eq(total - freight, fob)
+            if not match:
+                problems.append(f"{_fmt_num(qty)} {unit} × {_fmt_num(rate)} = {_fmt_num(qty * rate)}, "
+                                f"but the invoice total is {_fmt_num(total)}")
+            if fob_wrong:
                 problems.append(f"total {_fmt_num(total)} − freight {_fmt_num(freight)} = {_fmt_num(total - freight)}, "
                                 f"but the FOB value is {_fmt_num(fob)}")
             if problems:
-                for v, k in zip(values, ("net_weight", "unit_price", "total_amount", "freight", "fob_value")):
+                for v, k in zip(values, keys):
                     v.outlier = k in ("total_amount", "fob_value")
+                certain = strict or fob_wrong
                 checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals don't add up",
-                                    field="total_amount", status="error", values=values,
-                                    message="; ".join(problems) + ".",
+                                    field="total_amount", status="error" if certain else "warning", values=values,
+                                    message="; ".join(problems) + "." + ("" if certain else
+                                            " TallyTime could not tell what the price is charged per, so check this by hand."),
                                     suggestion="Recalculate the invoice amounts before the shipping bill is filed."))
             else:
                 checks.append(Check(id="math:invoice", category="arithmetic", title="Invoice totals add up",
                                     status="pass", values=values,
-                                    message=f"{_fmt_num(qty)} kg × {_fmt_num(rate)} = {_fmt_num(total)}"
+                                    message=f"{_fmt_num(qty)} {unit} × {_fmt_num(rate)} = {_fmt_num(total)}"
                                             + (f"; minus freight = FOB {_fmt_num(fob)}." if fob is not None else ".")))
 
     pl = _by_type(docs, "packing_list")
@@ -298,13 +338,22 @@ def arithmetic(docs: list[ParsedDocument]) -> list[Check]:
 
 REQUIRED = ["commercial_invoice", "packing_list", "shipping_bill"]
 RECOMMENDED = ["purchase_order", "health_certificate", "certificate_of_origin"]
+FOOD_PRODUCTS = ("seafood", "spices", "tea", "coffee", "cashew")   # a quality / health certificate is expected
+
+
+def recommended(docs: list[ParsedDocument]) -> list[str]:
+    """Supporting documents to expect: a quality or health certificate only for food (or when one was uploaded)."""
+    from .readiness import detect_product
+    food = detect_product(docs)[0] in FOOD_PRODUCTS or any(d.doc_type == "health_certificate" for d in docs)
+    return [t for t in RECOMMENDED if t != "health_certificate" or food]
 
 
 def compliance(docs: list[ParsedDocument]) -> list[Check]:
     checks = []
     present = {d.doc_type for d in docs}
     missing_req = [DOC_TYPES[t] for t in REQUIRED if t not in present]
-    missing_rec = [DOC_TYPES[t] for t in RECOMMENDED if t not in present]
+    expected = recommended(docs)
+    missing_rec = [DOC_TYPES[t] for t in expected if t not in present]
     if missing_req:
         checks.append(Check(id="comp:required_docs", category="compliance", title="Required documents missing",
                             status="error", message="Missing: " + ", ".join(missing_req) + ".",
@@ -315,10 +364,15 @@ def compliance(docs: list[ParsedDocument]) -> list[Check]:
     if missing_rec:
         checks.append(Check(id="comp:recommended_docs", category="compliance", title="Supporting documents missing",
                             status="warning", message="Not uploaded: " + ", ".join(missing_rec) + ".",
-                            suggestion="Seafood to the EU needs an EIC health certificate; buyers often ask for a certificate of origin."))
+                            suggestion="Seafood to the EU needs an EIC health certificate, and food exports usually need a "
+                                       "quality or health certificate. Buyers often ask for a certificate of origin."
+                                       if "health_certificate" in expected else
+                                       "Buyers often ask for a certificate of origin, and the purchase order lets "
+                                       "TallyTime check the invoice against what was ordered."))
     else:
+        names = [DOC_TYPES[t].lower() for t in expected]
         checks.append(Check(id="comp:recommended_docs", category="compliance", title="Supporting documents present",
-                            status="pass", message="Purchase order, health certificate and certificate of origin are present."))
+                            status="pass", message=(", ".join(names[:-1]) + " and " + names[-1]).capitalize() + " are present."))
 
     # LUT: if the shipping bill declares export under LUT, the invoice must carry the LUT reference.
     inv, sb = _by_type(docs, "commercial_invoice"), _by_type(docs, "shipping_bill")

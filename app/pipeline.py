@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import cache
 from .cache import file_hash  # noqa: F401  (used by the bundle splitter's cache keys)
-from .extract import extract_fields
+from .extract import extract_fields, reverify
 from .parsing import classify, has_text_layer, source_format, to_markdown
 from .formats import IMAGE_TYPES, OFFICE_TYPES
 from .schemas import ExtractedField, ParsedDocument
@@ -31,7 +31,9 @@ def _extract_cached(doc_type: str, text: str, cache_dir: Path, on_stage=_noop) -
     """Model extraction keyed by document text, so the same content in a different file is not re-read."""
     cached = cache_dir / f"fields_{cache.fields_key(doc_type, text)}.json"
     if cached.exists():
-        return {k: ExtractedField.model_validate(v) for k, v in json.loads(cached.read_text()).items()}
+        fields = {k: ExtractedField.model_validate(v) for k, v in json.loads(cached.read_text()).items()}
+        reverify(fields, text)
+        return fields
     on_stage("extracting", doc_type=doc_type)
     fields = extract_fields(doc_type, text, on_chars=lambda n: on_stage("extracting", chars=n))
     cached.write_text(json.dumps({k: v.model_dump() for k, v in fields.items()}))
@@ -49,6 +51,7 @@ def process_file(path: Path, filename: str | None = None, cache_key: str | None 
     cached = cache_dir / f"{cache_key or file_hash(path)}.json"
     if cached.exists():
         doc = ParsedDocument.model_validate_json(cached.read_text())
+        reverify(doc.fields, doc.text)
         doc.filename = filename or path.name
         doc.source_format = doc.source_format or source_format(path, doc.ocr_used)
         return doc

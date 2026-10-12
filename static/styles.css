@@ -599,3 +599,8 @@ a.brand { color: inherit; text-decoration: none; }
 .chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cdx-progressive, #36c); animation: chip-pulse 1.6s ease-in-out infinite; }
 @keyframes chip-pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .chip-dot { animation: none; } }
+.demo-group { margin: 8px 0 0; font-size: 12px; font-weight: 700; color: var(--muted); }
+.about-products { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin: 14px 0; }
+.about-products div { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.about-products dt { font-weight: 700; margin-bottom: 2px; }
+.about-products dd { margin: 0; color: var(--muted); font-size: 14px; }

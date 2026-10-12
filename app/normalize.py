@@ -6,6 +6,7 @@ engine can treat the value as missing rather than guessing.
 
 import re
 from datetime import date, datetime
+from typing import NamedTuple
 
 from rapidfuzz import fuzz
 
@@ -54,6 +55,51 @@ def weight_kg(raw: str | None, unit: str | None) -> float | None:
         if word in KG_PER_UNIT:
             return round(n * KG_PER_UNIT[word], 3)
     return round(n, 3)  # no unit given: assume kilograms
+
+
+class Unit(NamedTuple):
+    dim: str        # what is measured: weight, piece, pair, set, length, area, package
+    factor: float   # size of one unit in the dimension's base unit (kg, piece, pair, set, metre, m², package)
+    label: str      # how amounts in this unit are shown
+
+
+UNIT_WORDS = {
+    **{w: Unit("weight", 1, "kg") for w in ("kg", "kgs", "kilo", "kilos", "kilogram", "kilograms")},
+    **{w: Unit("weight", 1000, "MT") for w in ("mt", "mts", "t", "ton", "tons", "tonne", "tonnes", "metric")},
+    **{w: Unit("weight", 0.45359237, "lb") for w in ("lb", "lbs", "pound", "pounds")},
+    **{w: Unit("weight", 0.001, "g") for w in ("g", "gm", "gms", "gram", "grams")},
+    **{w: Unit("piece", 1, "pcs") for w in ("pc", "pcs", "piece", "pieces", "nos", "no", "number", "numbers",
+                                             "unit", "units", "each", "ea")},
+    **{w: Unit("piece", 12, "dozen") for w in ("doz", "dozen", "dozens", "dz")},
+    **{w: Unit("pair", 1, "pairs") for w in ("pair", "pairs", "pr", "prs")},
+    **{w: Unit("set", 1, "sets") for w in ("set", "sets")},
+    **{w: Unit("length", 1, "m") for w in ("m", "mtr", "mtrs", "metre", "metres", "meter", "meters", "rmt")},
+    **{w: Unit("area", 1, "m²") for w in ("sqm", "sqmt", "sqmtr", "m2")},
+    **{w: Unit("area", 0.09290304, "sq ft") for w in ("sqft", "sft")},
+    **{w: Unit("package", 1, "packages") for w in ("ctn", "ctns", "carton", "cartons", "box", "boxes", "bag",
+                                                   "bags", "bale", "bales", "roll", "rolls", "drum", "drums",
+                                                   "case", "cases", "pkg", "pkgs", "package", "packages")},
+}
+
+
+def unit(raw: str | None) -> Unit | None:
+    """The unit a quantity or price is in: 'USD/MT' -> MT, 'per dozen' -> dozen, 'Sq. M' -> m². None if unknown."""
+    if not raw:
+        return None
+    text = raw.lower().replace("²", "2")
+    text = re.sub(r"\bsq\.?\s*(m|mt|mtr|metre|meter)s?\b", "sqm", text)
+    text = re.sub(r"\bsq\.?\s*(ft|feet|foot)\b", "sqft", text)
+    for word in re.findall(r"[a-z]+\d?", text):
+        if word in UNIT_WORDS:
+            return UNIT_WORDS[word]
+    return None
+
+
+def units_in(text: str) -> set[Unit]:
+    """Every unit mentioned in a piece of text."""
+    text = re.sub(r"\bsq\.?\s*(m|mt|mtr|metre|meter)s?\b", "sqm", text.lower().replace("²", "2"))
+    text = re.sub(r"\bsq\.?\s*(ft|feet|foot)\b", "sqft", text)
+    return {UNIT_WORDS[w] for w in re.findall(r"[a-z]+\d?", text) if w in UNIT_WORDS}
 
 
 def parse_date(raw: str | None) -> date | None:

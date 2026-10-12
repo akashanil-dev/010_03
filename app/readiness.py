@@ -17,8 +17,21 @@ EU_WORDS = ["NETHERLANDS", "ROTTERDAM", "BELGIUM", "ANTWERP", "GERMANY", "HAMBUR
 US_WORDS = ["UNITED STATES", "USA", "U.S.A", "NEW YORK", "LOS ANGELES", "LONG BEACH", "SAVANNAH", "HOUSTON",
             "NORFOLK", "OAKLAND", "SEATTLE", "MIAMI", "NEWARK"]
 
-PRODUCTS = {"seafood": "Seafood (marine products)", "spices": "Spices", "rubber": "Natural rubber",
-            "general": "General goods"}
+PRODUCTS = {"seafood": "Seafood (marine products)", "spices": "Spices", "tea": "Tea", "coffee": "Coffee",
+            "cashew": "Cashew", "coir": "Coir products", "rubber": "Natural rubber", "general": "General goods"}
+
+# Commodity boards and export promotion councils that register exporters of each product (RCMC).
+BOARDS = {"spices": ("Spices Board registration (CRES)", ["SPICES BOARD", "CRES"]),
+          "tea": ("Tea Board registration", ["TEA BOARD"]),
+          "coffee": ("Coffee Board registration", ["COFFEE BOARD"]),
+          "cashew": ("CEPCI registration (Cashew Export Promotion Council)", ["CEPCI", "CASHEW EXPORT PROMOTION"]),
+          "coir": ("Coir Board registration", ["COIR BOARD"]),
+          "rubber": ("Rubber Board registration", ["RUBBER BOARD"])}
+BOARD_NAMES = {"spices": "the Spices Board", "tea": "the Tea Board of India", "coffee": "the Coffee Board of India",
+               "cashew": "the Cashew Export Promotion Council of India (CEPCI)", "coir": "the Coir Board",
+               "rubber": "the Rubber Board"}
+PLANT_PRODUCTS = ("spices", "tea", "coffee", "cashew")
+EUDR_PRODUCTS = {"rubber": "natural rubber", "coffee": "coffee"}   # commodities covered by the EU Deforestation Regulation
 DESTINATIONS = {"eu": "European Union", "us": "United States", "other": "Other / not detected"}
 
 
@@ -31,17 +44,27 @@ def _raw(doc, key):
     return f.raw if f else None
 
 
+HS_PRODUCTS = [   # checked in order: coffee and tea before the rest of chapter 09 (spices)
+    (("03", "1604", "1605"), "seafood"),
+    (("0901",), "coffee"),
+    (("0902",), "tea"),
+    (("09",), "spices"),
+    (("080131", "080132"), "cashew"),   # cashew in shell and shelled; the rest of 0801 is coconuts and Brazil nuts
+    (("530810", "570220"), "coir"),     # coir yarn, coir floor coverings and mats
+    (("4001",), "rubber"),
+]
+
+
 def detect_product(docs: list[ParsedDocument]) -> tuple[str, str]:
     for d in docs:
         hs = N.hs_code(_raw(d, "hs_code"))
         if not hs:
             continue
-        if hs.startswith("03") or hs.startswith("1604") or hs.startswith("1605"):
-            return "seafood", f"HS code {hs}"
-        if hs.startswith("09"):
-            return "spices", f"HS code {hs}"
-        if hs.startswith("4001"):
-            return "rubber", f"HS code {hs}"
+        for prefixes, product in HS_PRODUCTS:
+            if hs.startswith(prefixes):
+                return product, f"HS code {hs}"
+        if any("COIR" in (_raw(x, "description") or "").upper() for x in docs):
+            return "coir", f"HS code {hs}, described as coir"
         return "general", f"HS code {hs}"
     return "general", "no HS code found"
 
@@ -131,23 +154,29 @@ def build(docs: list[ParsedDocument]) -> dict:
             add("Seafood", "Health / sanitary certificate", "ok" if "health_certificate" in present else "check",
                 "Uploaded." if "health_certificate" in present
                 else "Many importing countries require one; check the buyer's and the destination's requirements.")
-    elif product == "spices":
-        add("Spices", "Spices Board registration (CRES)", "ok" if "SPICES BOARD" in inv_text or "CRES" in inv_text else "check",
-            "Registration shown on the invoice." if "SPICES BOARD" in inv_text or "CRES" in inv_text
-            else "Exporters of spices must hold a Spices Board registration (CRES); it is not shown on the invoice.")
-        add("Spices", "Phytosanitary certificate", "check",
-            "Usually required by the importing country for plant products. Confirm with the buyer.")
-    elif product == "rubber":
-        add("Natural rubber", "Rubber Board registration", "check",
-            "Confirm the exporter's Rubber Board registration is current.")
+    elif product in BOARDS:
+        group, (item, marks) = PRODUCTS[product], BOARDS[product]
+        shown = any(m in inv_text for m in marks)
+        add(group, item, "ok" if shown else "check",
+            "Registration shown on the invoice." if shown
+            else f"Exporters of {PRODUCTS[product].lower()} register with {BOARD_NAMES[product]} (RCMC); "
+                 "it is not shown on the invoice. Confirm the registration is current.")
+        if product in PLANT_PRODUCTS:
+            add(group, "Phytosanitary certificate", "check",
+                "Usually required by the importing country for plant products. Confirm with the buyer.")
+        if product == "coir":
+            add(group, "Fumigation or phytosanitary certificate", "check",
+                "Natural-fibre goods are often fumigated before shipment. Confirm whether the buyer or the destination "
+                "asks for a fumigation or phytosanitary certificate.")
 
     if product == "seafood":
         add("Seafood", "Farm traceability for this lot", "check",
             "MPEDA's Aqua Trace enrols aquaculture farms and hatcheries; antibiotic rejections abroad have been traced "
             "back to farms. Keep the farm and hatchery records for this lot ready.")
-    if product == "rubber" and dest == "eu":
-        add("Natural rubber to the EU", "EUDR due-diligence statement and plot geolocation", "check",
-            "The EU Deforestation Regulation covers natural rubber. It applies from 30 Dec 2026 for medium and large "
+    if product in EUDR_PRODUCTS and dest == "eu":
+        name = EUDR_PRODUCTS[product]
+        add(f"{name[0].upper() + name[1:]} to the EU", "EUDR due-diligence statement and plot geolocation", "check",
+            f"The EU Deforestation Regulation covers {name}. It applies from 30 Dec 2026 for medium and large "
             "operators and 30 Jun 2027 for micro and small ones. The EU buyer will need plot geolocation and proof of "
             "no deforestation after 31 Dec 2020.")
 
