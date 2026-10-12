@@ -10,7 +10,13 @@ Produces three sets under data/demo/:
   scanned/  the errors set, with the packing list as an image-only "scan"
 
 All companies, people and ID numbers are fictitious.
-Usage: python tools/make_demo_docs.py
+Usage: python tools/make_demo_docs.py               (all demo sets)
+       python tools/make_demo_docs.py --never-seen  (only a fresh data/demo/never_seen set)
+
+never_seen/ is for a live demo: the clean set with a packing list whose text has
+never been read before, so the AI reads it in real time. Its container number
+differs from the other documents, so exactly one error is expected. Each run
+creates new random values, so the set is new again after it has been cached.
 """
 
 import copy
@@ -367,5 +373,29 @@ def make_mixed(errors: dict) -> None:
     make_phone_photo(OUT / "errors" / "03_packing_list.pdf", mixed / "03_packing_list_photo.jpg")
 
 
+def make_never_seen() -> None:
+    folder = OUT / "never_seen"
+    folder.mkdir(parents=True, exist_ok=True)
+    for f in folder.glob("*"):
+        f.unlink()
+    for fname in DOCS:
+        if fname != "03_packing_list.pdf":
+            (folder / fname).write_bytes((OUT / "clean" / fname).read_bytes())
+    rng = random.SystemRandom()
+    owner = rng.choice(["TCLU", "MSKU", "CMAU", "SEGU", "TRIU"])
+    data = dict(CLEAN)
+    data["container"] = f"{owner} {rng.randint(100000, 999999)}-{rng.randint(0, 9)}"
+    data["seal"] = f"EIA {rng.randint(1000000, 9999999)}"
+    data["pl_no"] = f"KME/PL/26-27/{rng.randint(100, 999):04d}"
+    render_pdf(doc_packing(data), folder / "03_packing_list_live.pdf")
+    print(f"Wrote {folder}: packing list container {data['container']} (the others say {CLEAN['container']})")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--never-seen" in sys.argv:
+        make_never_seen()
+    else:
+        main()
+        make_never_seen()
