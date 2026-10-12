@@ -78,14 +78,13 @@ Without email settings (`SMTP_HOST` empty), TallyTime prints each email, includi
 
 ### 5. Run
 
-TallyTime is two processes: the web app, and the worker that reads documents. Start each in its own terminal:
-
 ```bash
-uvicorn app.main:app --port 8000   # terminal 1: the web app
-python -m app.worker               # terminal 2: the worker (wait for "Worker ready")
+./run.sh
 ```
 
-Open **http://localhost:8000**, create an account and open the confirmation link printed in terminal 1. Then click **"With planted errors"** to run the demo shipment, or drop your own documents. The API documentation is at **http://localhost:8000/docs** (after logging in).
+This starts both parts of TallyTime, the web app and the worker that reads documents, in one terminal (their output is labelled `[web]` and `[worker]`). `Ctrl+C` stops both. Use `PORT=8001 ./run.sh` for another port. To run them separately instead: `uvicorn app.main:app --port 8000` in one terminal and `python -m app.worker` in another.
+
+Open **http://localhost:8000**, create an account and open the confirmation link printed in the terminal (the line containing `#verify=`). Then click **"With planted errors"** to run the demo shipment, or drop your own documents. The API documentation is at **http://localhost:8000/docs** (after logging in).
 
 ### 6. Run the tests
 
@@ -99,16 +98,13 @@ pytest -q
 
 ### A. Starting TallyTime each time
 
-After the one-time setup above, every session starts with these commands, from the project folder:
+After the one-time setup above, every session is one command from the project folder (start Ollama first if it does not run as a service: `ollama serve &`):
 
 ```bash
-ollama serve &                            # 1. start the local AI model (skip if Ollama runs as a service)
-source .venv/bin/activate                 # 2. activate the Python environment
-uvicorn app.main:app --port 8000          # 3. start the web app
-python -m app.worker                      # 4. in a second terminal (after activating): start the worker
+./run.sh
 ```
 
-Wait until the first terminal prints `Application startup complete` and the second `Worker ready`, then open **http://localhost:8000** in a browser and log in. Leave both terminals open; press `Ctrl+C` in each to stop TallyTime.
+Wait for `[worker] … Worker ready`, then open **http://localhost:8000** in a browser and log in. Leave the terminal open; press `Ctrl+C` to stop TallyTime.
 
 > The very first document after starting takes longer (the reading models load into memory). Run one demo first if you are about to present.
 
@@ -255,8 +251,8 @@ This rewrites everything in `data/demo/`. The rewritten files are new to the cac
 | Problem | Fix |
 |---|---|
 | Browser says the site can't be reached | TallyTime is not running. Start it with step A and keep the terminal open. |
-| A check stays on *Waiting in the queue* | The worker is not running. Start `python -m app.worker` in a second terminal (step A). |
-| No confirmation email arrives (local) | Without `SMTP_HOST`, emails are printed in the web app's terminal: open the `#verify=` link from there. |
+| A check stays on *Waiting in the queue* | The worker is not running. Start TallyTime with `./run.sh`, which runs the worker too (step A). |
+| No confirmation email arrives (local) | Without `SMTP_HOST`, emails are printed in the terminal (`[web]` lines): open the `#verify=` link from there. |
 | "You have used all 5 checks for today" | The daily limit resets at midnight (India time). Demo shipments still work. On a server, `python -m app.admin set-limit EMAIL N` raises it for one account. |
 | A document stays on *Reading…* or fails with "connection refused" | Ollama is not running. Run `ollama serve &` and check `curl http://localhost:11434/api/version`. |
 | `model "granite4:micro" not found` | Run `ollama pull granite4:micro`. |
