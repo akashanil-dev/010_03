@@ -551,3 +551,22 @@ a.brand { color: inherit; text-decoration: none; }
   .account-bar, .mainnav { flex-wrap: wrap; }
   .legal-table { display: block; overflow-x: auto; }
 }
+
+/* Server resource meters in the top bar (Colab style) */
+.sysmon { display: flex; gap: 12px; align-items: center; }
+.meter { position: relative; display: flex; flex-direction: column; gap: 3px; width: 54px; font-size: 11px; font-weight: 700; letter-spacing: .5px; color: var(--cdx-subtle, #54595d); cursor: default; border-radius: 2px; }
+.meter:focus-visible { outline: 2px solid var(--cdx-progressive, #36c); outline-offset: 3px; }
+.meter-track { height: 6px; background: var(--cdx-bg-interactive, #eaecf0); border-radius: 999px; overflow: hidden; }
+.meter-fill { display: block; height: 100%; width: 0; background: var(--cdx-success, #14866d); border-radius: 999px; transition: width .6s ease; }
+.meter.warn .meter-fill { background: var(--cdx-warning-border, #ab7f2a); }
+.meter.high .meter-fill { background: var(--cdx-error, #d73333); }
+.meter.off { color: var(--cdx-placeholder, #72777d); }
+.meter.off .meter-label, .meter.off .meter-track { opacity: .55; }   /* not the tooltip */
+.meter.off .meter-track { background: repeating-linear-gradient(135deg, #eaecf0 0 4px, #f8f9fa 4px 8px); }
+.meter[data-tip]:hover::after, .meter[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  white-space: pre; background: #202122; color: #fff; font-size: 12px; font-weight: 400; letter-spacing: 0;
+  line-height: 1.5; padding: 8px 10px; border-radius: 4px; box-shadow: 0 4px 16px #0003; pointer-events: none;
+}
+.meter:first-child[data-tip]:hover::after, .meter:first-child[data-tip]:focus-visible::after { right: auto; left: 0; }
+@media (max-width: 900px) { .sysmon { order: 5; } .meter { width: 46px; } }

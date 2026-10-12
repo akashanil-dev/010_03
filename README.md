@@ -29,6 +29,7 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **Upload safety:** at most 12 files, 10 MB each and 25 pages per PDF; each file's real content is checked against its extension. Unrelated files, duplicates and documents TallyTime does not check yet (such as a bill of lading) are flagged, and unrelated files never reach the AI model.
 - **Printable review report** ending with the final verdict, an **export bar under every results tab**, and **delete uploaded files** for each shipment.
 - **REST API** with interactive documentation at `/docs`, so an ERP or a customs broker's system could submit documents directly.
+- **Server resource meters** in the top bar, as in Google Colab: CPU, RAM and GPU of the server, with how much TallyTime and the AI model use on hover. GPU is greyed out when the server has none.
 - **Interface** styled after the Wikimedia Codex design language, with the AI model in use named in the header.
 
 ---
@@ -330,6 +331,7 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/progress.py` | Progress and time estimates, learned from how long each stage takes on this machine |
 | `app/notify.py`, `app/mailer.py` | Web Push and email notifications; Brevo SMTP and the Turnstile bot check |
 | `app/retention.py`, `app/cache.py` | 7-day erasure of shipments and per-workspace reading caches |
+| `app/system.py` | Server CPU, RAM and GPU use for the top-bar meters, split into TallyTime, the AI model and the rest |
 | `app/limits.py`, `app/config.py`, `app/admin.py` | Request rate limits, settings from `.env`, and the server admin command |
 | `app/uploads.py` | Upload limits and file-content validation |
 | `app/extract.py` | LLM field extraction and source-text verification |
@@ -342,7 +344,7 @@ PDF ──► Docling (layout, tables, OCR)
 | `static/` | Web interface (plain HTML, CSS, JavaScript, Codex-style theme); `session.js` handles accounts, the queue and notifications, `sw.js` shows push notifications, `ml.js` holds the Malayalam wording; `privacy.html`, `terms.html` |
 | `deploy/`, `DEPLOY.md` | Server setup for the public site: Caddy, systemd services, backups |
 | `tools/make_demo_docs.py` | Generates the synthetic demo shipment |
-| `tests/` | 57 tests: rules, normalisation, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts and retention |
+| `tests/` | 62 tests: rules, normalisation, LC, lab results, uploads and final verdict on recorded model output; storage, accounts, data isolation, workspaces, limits, the queue, the worker's timeouts, retention and the resource meters |
 | `data/demo/` | The synthetic demo shipments (seven sets) |
 | `data/cache/`, `data/uploads/`, `data/tally.db` | Created at run time: reading cache, uploaded files and shipment history. Not in the repository. |
 

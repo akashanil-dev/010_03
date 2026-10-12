@@ -307,9 +307,36 @@ function renderQuota() {
 function enterApp() {
   $("#mainnav").hidden = false;
   $("#account-bar").hidden = false;
+  api("/api/system").then(renderSystem).catch(() => {});   // first reading at once, then live updates
   startEvents();
   ensurePush();
   openFromHash();
+}
+
+/* ---------- server resources (top bar) ---------- */
+function setMeter(id, percent, tip) {
+  const m = $(id);
+  const pct = Math.max(0, Math.min(100, percent ?? 0));
+  m.querySelector(".meter-fill").style.width = `${pct}%`;
+  m.classList.toggle("warn", pct >= 70 && pct < 90);
+  m.classList.toggle("high", pct >= 90);
+  m.dataset.tip = tip;
+  m.setAttribute("aria-label", tip.replace(/\n/g, ". "));
+}
+
+function renderSystem(s) {
+  if (!s) return;
+  $("#sysmon").hidden = false;
+  const c = s.cpu, r = s.ram, g = s.gpu;
+  const otherCpu = Math.max(0, c.percent - c.tallytime - c.model).toFixed(0);
+  const otherRam = Math.max(0, r.used_gb - r.tallytime_gb - r.model_gb).toFixed(1);
+  setMeter("#meter-cpu", c.percent,
+    `CPU ${c.percent.toFixed(0)}% of ${c.cores} cores\nTallyTime ${c.tallytime.toFixed(0)}% · AI model ${c.model.toFixed(0)}% · other ${otherCpu}%`);
+  setMeter("#meter-ram", r.percent,
+    `RAM ${r.used_gb} of ${r.total_gb} GB (${r.percent.toFixed(0)}%)\nTallyTime ${r.tallytime_gb} GB · AI model ${r.model_gb} GB · other ${otherRam} GB`);
+  $("#meter-gpu").classList.toggle("off", !g);
+  if (g) setMeter("#meter-gpu", g.percent, `${g.name}\nGPU ${g.percent.toFixed(0)}% · memory ${g.used_gb} of ${g.total_gb} GB`);
+  else setMeter("#meter-gpu", 0, "No GPU on this server\nDocuments are read on the CPU");
 }
 
 /* ---------- live queue ---------- */
@@ -317,6 +344,7 @@ function startEvents() {
   if (events || !window.EventSource) return;
   events = new EventSource("/api/events");
   events.onmessage = (e) => onQueue(JSON.parse(e.data));
+  events.addEventListener("system", (e) => renderSystem(JSON.parse(e.data)));
   events.onerror = () => { /* the browser reconnects by itself */ };
 }
 

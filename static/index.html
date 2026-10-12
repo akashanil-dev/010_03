@@ -18,6 +18,11 @@
     <button class="navlink" id="nav-queue">Queue <span id="queue-count" class="pill" hidden></span></button>
     <button class="navlink" id="nav-dashboard">Dashboard</button>
   </nav>
+  <div class="sysmon" id="sysmon" role="group" aria-label="Server resources" hidden>
+    <div class="meter" id="meter-cpu" tabindex="0" role="img"><span class="meter-label">CPU</span><span class="meter-track"><span class="meter-fill"></span></span></div>
+    <div class="meter" id="meter-ram" tabindex="0" role="img"><span class="meter-label">RAM</span><span class="meter-track"><span class="meter-fill"></span></span></div>
+    <div class="meter off" id="meter-gpu" tabindex="0" role="img"><span class="meter-label">GPU</span><span class="meter-track"><span class="meter-fill"></span></span></div>
+  </div>
   <div class="privacy-badge" id="model-badge" title="The AI model that reads the documents runs on the TallyTime server. Your documents are not sent to any outside AI service.">
     <span class="dot"></span> <span id="model-text">IBM Granite 4.0 Micro (3B) · on our server</span>
   </div>

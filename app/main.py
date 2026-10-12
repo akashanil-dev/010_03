@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import accounts, auth, jobs, progress, retention, store, uploads
+from . import accounts, auth, jobs, progress, retention, store, system, uploads
 from .auth import active_user
 from .formats import SUPPORTED
 
@@ -44,6 +44,7 @@ app.include_router(auth.router)
 @app.on_event("startup")
 def _startup():
     store.init()
+    system.start()
 
 
 @app.middleware("http")
@@ -230,17 +231,28 @@ def queue(user: dict = Depends(active_user)):
 
 @app.get("/api/events")
 async def events(request: Request, user: dict = Depends(active_user)):
-    """Live queue updates (server-sent events) for the queue panel and finish notifications."""
+    """Live updates (server-sent events): the queue, for the queue panel and finish notifications, and the
+    server's resource use, for the meters in the top bar."""
     async def stream():
-        last, sent = None, 0.0
+        last, sent, sys_at = None, 0.0, None
         while not await request.is_disconnected():
             body = json.dumps(await run_in_threadpool(_queue, user))
             if body != last or time.time() - sent > 15:   # also a keep-alive
                 yield f"data: {body}\n\n"
                 last, sent = body, time.time()
+            snap = system.latest()
+            if snap and snap["at"] != sys_at:
+                yield f"event: system\ndata: {json.dumps(snap)}\n\n"
+                sys_at = snap["at"]
             await asyncio.sleep(1.5)
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/system")
+def system_overview(user: dict = Depends(active_user)):
+    """CPU, RAM and GPU use of the whole server, split into TallyTime, the AI model and everything else."""
+    return system.latest() or system.sample()
 
 
 @app.get("/api/info")

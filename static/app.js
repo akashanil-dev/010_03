@@ -23,7 +23,7 @@ function show(view) {
   for (const v of ["upload", "processing", "results", "auth", "account"]) $(`#view-${v}`).hidden = v !== view;
   $("#nav-new").classList.toggle("active", view === "upload");
   $("#nav-account").classList.toggle("active", view === "account");
-  if (view === "auth") { $("#mainnav").hidden = true; $("#account-bar").hidden = true; }
+  if (view === "auth") { $("#mainnav").hidden = true; $("#account-bar").hidden = true; $("#sysmon").hidden = true; }
   if (view !== "processing" && view !== "results") { clearInterval(pollTimer); current = null; }
   window.scrollTo(0, 0);
   if (view === "upload") { loadDashboard(); renderQuota(); }

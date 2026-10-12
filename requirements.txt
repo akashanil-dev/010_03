@@ -12,3 +12,4 @@ python-dotenv
 pytest
 argon2-cffi
 pywebpush
+psutil

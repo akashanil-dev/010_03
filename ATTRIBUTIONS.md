@@ -20,6 +20,7 @@
 | [Pillow](https://python-pillow.org) | Simulated scan for the demo set | MIT-CMU |
 | [IBM watsonx.ai SDK](https://pypi.org/project/ibm-watsonx-ai/) | Optional cloud provider | BSD-3 |
 | python-dotenv, pytest | Configuration, tests | BSD-3, MIT |
+| [psutil](https://github.com/giampaolo/psutil) | Server CPU and RAM use for the top-bar meters | BSD-3 |
 | [argon2-cffi](https://argon2-cffi.readthedocs.io) | Password hashing | MIT |
 | [pywebpush](https://github.com/web-push-libs/pywebpush) | Browser push notifications | MPL-2.0 |
 | [Caddy](https://caddyserver.com) | HTTPS reverse proxy on the public server | Apache 2.0 |
