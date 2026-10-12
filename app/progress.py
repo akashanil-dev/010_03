@@ -1,8 +1,9 @@
 """Progress and time estimates, learned from how long each stage takes on this machine.
 
 Every document goes through two timed stages: conversion (Docling, per page; OCR pages are much slower)
-and extraction (one Granite call per document; while it streams, the characters produced so far show
-how far along it is). Running averages are kept in the `timings` table and updated after each document.
+and extraction (one Granite call per document). Extraction has two phases: the model first reads the prompt
+in silence ("prefill", measured by time), then writes its answer (measured by the characters streamed so far).
+Running averages are kept in the `timings` table and updated after each document.
 """
 
 import math
@@ -16,6 +17,7 @@ DEFAULTS = {
     "page:text": 3.0, "page:ocr": 12.0, "page:office": 3.0,   # conversion seconds per page
     "split:page": 1.5,                                         # bundle splitting seconds per page
     "extract": 60.0,                                           # seconds per extraction (any document type)
+    "prefill": 30.0,                                           # of which: reading the prompt, before any output
     "chars": 700.0,                                            # characters the model writes per document
 }
 ALPHA = 0.2   # weight of the newest measurement in the running average
@@ -76,9 +78,14 @@ def file_estimate(f: dict, t: dict, now: float | None = None) -> tuple[int, floa
     if f["state"] == "splitting":
         return 0, max(split - elapsed, 1) + total
     if f.get("stage") == "extracting":
-        expect_chars = t.get(f"chars:{f.get('doc_type')}", t["chars"])
-        frac = f["chars"] / expect_chars if f.get("chars") else elapsed / ext
-        frac = min(frac, 0.97)
+        doc_type = f.get("doc_type")
+        prefill = min(t.get(f"prefill:{doc_type}", t["prefill"]), ext * 0.9)
+        share = prefill / ext
+        if f.get("chars"):   # writing the answer: by characters, after the prefill share
+            expect_chars = t.get(f"chars:{doc_type}", t["chars"])
+            frac = share + (1 - share) * min(f["chars"] / expect_chars, 0.97)
+        else:                # still reading the prompt: by time, never past the prefill share
+            frac = share * min(elapsed / prefill, 0.97)
         return int(100 * (conv + frac * ext) / total), max(ext * (1 - frac), 1.0)
     frac = min(elapsed / conv, 0.95) if conv else 0.95
     return int(100 * frac * conv / total), max(conv - elapsed, conv * 0.05) + ext

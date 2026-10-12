@@ -82,6 +82,8 @@ def _read(cmd: dict) -> str:
         if stage not in seen:
             seen[stage] = time.time()
             info["stage_started"] = seen[stage]
+        if info.get("chars") and "first_chars" not in seen:
+            seen["first_chars"] = time.time()   # the model finished reading the prompt
         seen.update({f"{stage}:{k}": v for k, v in info.items()})
         store.update_file(sid, idx, stage=stage, **info)
 
@@ -95,6 +97,9 @@ def _read(cmd: dict) -> str:
         seconds, chars = end - seen["extracting"], seen.get("extracting:chars")
         for key in ("extract", f"extract:{doc.doc_type}"):
             progress.record(key, seconds)
+        if "first_chars" in seen:
+            for key in ("prefill", f"prefill:{doc.doc_type}"):
+                progress.record(key, seen["first_chars"] - seen["extracting"])
         if chars:
             for key in ("chars", f"chars:{doc.doc_type}"):
                 progress.record(key, chars)

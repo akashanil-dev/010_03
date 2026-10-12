@@ -20,13 +20,29 @@ if [ ! -f .env ]; then
   cp .env.example .env
   echo "Created .env from .env.example (local defaults)."
 fi
-if ! curl -s -m 2 http://localhost:11434/api/version >/dev/null; then
-  echo "Warning: Ollama is not running. Demos still load from the cache, but new documents cannot be read."
-  echo "         Start it with: sudo systemctl start ollama   (or: ollama serve &)"
-fi
-
-# Stop everything this script started (including the worker's reader process) on exit or Ctrl+C
+# Stop everything this script started (Ollama if we started it, the web app, the worker and its reader)
 trap 'trap - EXIT INT TERM; kill 0 2>/dev/null' EXIT INT TERM
+
+# The AI model: use a running Ollama, or start one (from the PATH or ~/.local/ollama/bin)
+OLLAMA_BIN=${OLLAMA_BIN:-$(command -v ollama || true)}
+[ -z "$OLLAMA_BIN" ] && [ -x "$HOME/.local/ollama/bin/ollama" ] && OLLAMA_BIN="$HOME/.local/ollama/bin/ollama"
+MODEL=$(sed -n 's/^OLLAMA_MODEL=//p' .env | head -1)
+MODEL=${MODEL:-granite4:micro}
+ollama_up() { curl -s -m 2 http://localhost:11434/api/version >/dev/null; }
+if ! ollama_up; then
+  if [ -n "$OLLAMA_BIN" ]; then
+    echo "Starting Ollama ($OLLAMA_BIN); its log is in data/ollama.log"
+    mkdir -p data
+    "$OLLAMA_BIN" serve >> data/ollama.log 2>&1 &
+    for _ in $(seq 1 30); do ollama_up && break; sleep 0.5; done
+  fi
+fi
+if ! ollama_up; then
+  echo "Warning: Ollama is not running. Demos still load from the cache, but new documents cannot be read."
+  echo "         Install it (https://ollama.com/download), or set OLLAMA_BIN=/path/to/ollama."
+elif [ -n "$OLLAMA_BIN" ] && ! "$OLLAMA_BIN" list 2>/dev/null | grep -q "^$MODEL"; then
+  echo "Warning: the model $MODEL is not downloaded. Run: $OLLAMA_BIN pull $MODEL"
+fi
 
 "$PY" -m uvicorn app.main:app --port "$PORT" 2>&1 | sed -u 's/^/[web]    /' &
 "$PY" -m app.worker 2>&1 | sed -u 's/^/[worker] /' &

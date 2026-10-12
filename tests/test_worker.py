@@ -181,3 +181,15 @@ def test_connection_errors_count_as_our_fault():
     except RuntimeError as exc:
         assert worker._model_unreachable(exc)
     assert not worker._model_unreachable(ValueError("bad PDF"))
+
+
+def test_progress_never_goes_back_when_the_model_starts_writing():
+    """Prefill (silent prompt reading) is timed; writing is counted in characters. The switch must not drop."""
+    t = progress.DEFAULTS | {"extract": 90.0, "prefill": 50.0, "chars": 765.0}
+    now = time.time()
+    base = {"filename": "a.pdf", "state": "reading", "page_count": 1, "stage": "extracting", "stage_started": now - 48}
+    reading_prompt = progress.file_estimate(base, t, now)[0]
+    long_prefill = progress.file_estimate(base | {"stage_started": now - 200}, t, now)[0]   # slower than learned
+    first_chars = progress.file_estimate(base | {"chars": 20}, t, now)[0]
+    almost = progress.file_estimate(base | {"chars": 760}, t, now)[0]
+    assert reading_prompt <= long_prefill <= first_chars < almost < 100
