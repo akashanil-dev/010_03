@@ -592,3 +592,10 @@ a.brand { color: inherit; text-decoration: none; }
 .about-sources h2 { font-size: 16px; }
 .about-sources a { overflow-wrap: anywhere; }
 .about-sources li:target { background: var(--cdx-progressive-bg, #eaf3ff); }
+
+/* "N in progress" chip in the top bar, shown only while checks are running or waiting */
+.progress-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--cdx-progressive, #36c) !important; border-radius: 999px; padding: 4px 12px; font-size: 13px; background: var(--cdx-progressive-bg, #eaf3ff); }
+.progress-chip[hidden] { display: none; }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cdx-progressive, #36c); animation: chip-pulse 1.6s ease-in-out infinite; }
+@keyframes chip-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .chip-dot { animation: none; } }

@@ -42,7 +42,7 @@ elif command -v ollama >/dev/null && ! ollama list 2>/dev/null | grep -q "^$MODE
   echo "Warning: the model $MODEL is not downloaded. Run: ollama pull $MODEL"
 fi
 
-"$PY" -m uvicorn app.main:app --port "$PORT" 2>&1 | sed -u 's/^/[web]    /' &
+"$PY" -m uvicorn app.main:app --port "$PORT" --timeout-graceful-shutdown 5 2>&1 | sed -u 's/^/[web]    /' &
 "$PY" -m app.worker 2>&1 | sed -u 's/^/[worker] /' &
 
 echo

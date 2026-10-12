@@ -390,9 +390,11 @@ function flashTitle(text) {
 
 function renderQueue() {
   const active = queueState.jobs.filter((j) => ACTIVE.includes(j.state));
-  const pill = $("#queue-count");
-  pill.textContent = active.length;
-  pill.hidden = !active.length;
+  // The top-bar chip exists only while something is running or waiting
+  const chip = $("#nav-queue");
+  chip.hidden = !active.length;
+  $("#queue-count").textContent = `${active.length} in progress`;
+  chip.title = `${active.length} ${active.length === 1 ? "check is" : "checks are"} running or waiting. Show the queue.`;
   const section = $("#queue");
   section.hidden = !queueState.jobs.length;
   if (!queueState.jobs.length) return;
