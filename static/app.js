@@ -10,7 +10,7 @@ const DOC_SHORT = {
 };
 const STATUS_LABEL = { error: "ERROR", warning: "WARNING", pass: "PASS", skipped: "SKIPPED", info: "" };
 
-const NUMERIC_ROWS = new Set(["cartons", "net_weight", "gross_weight", "fob_value", "hs_code"]);
+const NUMERIC_ROWS = new Set(["quantity", "cartons", "net_weight", "gross_weight", "fob_value", "hs_code"]);
 
 const ACCEPTED = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "xlsx", "xls", "ods", "docx", "doc", "odt", "csv"];
 let lang = "en";
