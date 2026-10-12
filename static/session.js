@@ -76,6 +76,7 @@ function forgetInvite() {
 }
 
 async function boot() {
+  syncThemeColor();
   try { publicConfig = await (await fetch("/api/public-config")).json(); } catch { publicConfig = {}; }
   $("#auth-quota").textContent = publicConfig.daily_shipments ?? 5;
   $("#auth-retention").textContent = publicConfig.retention_days ?? 7;
@@ -470,6 +471,31 @@ async function disablePush() {
   pushActive = false;
 }
 
+/* ---------- appearance ---------- */
+// The device's light or dark setting is followed by CSS; a choice made here overrides it for this browser.
+function themeChoice() {
+  try { return localStorage.getItem("tallytime-theme") || "system"; } catch { return "system"; }
+}
+
+function setTheme(choice) {
+  try {
+    if (choice === "system") localStorage.removeItem("tallytime-theme");
+    else localStorage.setItem("tallytime-theme", choice);
+  } catch { /* storage blocked: applies until the page is reloaded */ }
+  if (choice === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", choice);
+  syncThemeColor();
+}
+
+function syncThemeColor() {
+  // The browser bar colour on phones: by device setting, or the chosen theme
+  const chosen = document.documentElement.getAttribute("data-theme");
+  $$('meta[name="theme-color"]').forEach((m) => {
+    const dark = chosen ? chosen === "dark" : m.media.includes("dark");
+    m.content = dark ? "#1b1e22" : "#ffffff";
+  });
+}
+
 /* ---------- account page ---------- */
 function openAccount() {
   history.replaceState(null, "", "#account");
@@ -493,6 +519,23 @@ function renderAccount() {
       <label class="check"><input type="checkbox" id="notify-email" ${me.notify_email ? "checked" : ""}> Also email me when a check finishes</label>
     </div>
 
+    <div class="card"><h3>Appearance</h3>
+      <p class="muted small">TallyTime follows your device's light or dark setting. You can fix it for this browser instead.</p>
+      <div class="segmented" role="radiogroup" aria-label="Theme">
+        ${[["system", "Same as device"], ["light", "Light"], ["dark", "Dark"]].map(([v, label]) =>
+          `<label><input type="radio" name="theme" value="${v}" ${themeChoice() === v ? "checked" : ""}> ${label}</label>`).join("")}
+      </div>
+    </div>
+
+    <div class="card"><h3>Password and sessions</h3>
+      <form id="f-password" class="form">
+        <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
+        <label>New password <span class="muted small">(at least 10 characters)</span><input type="password" name="new" autocomplete="new-password" minlength="10" required></label>
+        <button class="btn" type="submit">Change password</button>
+      </form>
+      <div class="row-actions"><button class="btn small" id="logout">Log out</button><button class="btn small" id="logout-all">Log out on every device</button></div>
+    </div>
+
     <div class="card wide"><h3>Workspace: ${esc(ws.name)}</h3>
       <p class="muted">Everyone in a workspace sees and reviews all of its shipments. ${owner ? "You own this workspace." : "You are a member of this workspace."}</p>
       ${owner ? `<form id="f-rename" class="form inline"><label>Workspace name<input name="name" maxlength="60" value="${esc(ws.name)}" required></label><button class="btn" type="submit">Rename</button></form>` : ""}
@@ -506,16 +549,7 @@ function renderAccount() {
       ${me.workspaces.length > 1 ? `<p class="muted small">You can switch workspaces with the selector at the top of the page.</p>` : ""}
     </div>
 
-    <div class="card"><h3>Password and sessions</h3>
-      <form id="f-password" class="form">
-        <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
-        <label>New password <span class="muted small">(at least 10 characters)</span><input type="password" name="new" autocomplete="new-password" minlength="10" required></label>
-        <button class="btn" type="submit">Change password</button>
-      </form>
-      <div class="row-actions"><button class="btn small" id="logout">Log out</button><button class="btn small" id="logout-all">Log out on every device</button></div>
-    </div>
-
-    <div class="card danger-zone"><h3>Delete account</h3>
+    <div class="card wide danger-zone"><h3>Delete account</h3>
       <p class="muted">Deletes your account, your workspace and every shipment in it straight away. Workspaces you joined are not affected.</p>
       <form id="f-delete" class="form inline"><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Delete my account</button></form>
     </div>
@@ -528,6 +562,7 @@ function renderAccount() {
   $("#notify-email").onchange = (e) => run(() => api("/api/me", { method: "PATCH", body: { notify_email: e.target.checked } }),
     e.target.checked ? "You will get an email when a check finishes." : "Emails turned off.");
   $("#push-on")?.addEventListener("click", enableNotifications);
+  $$('input[name="theme"]').forEach((r) => r.onchange = () => setTheme(r.value));
   $("#push-off")?.addEventListener("click", () => run(disablePush, "Notifications turned off on this device."));
   if (owner) {
     form("#f-rename", (f) => run(() => api("/api/workspaces/rename", { method: "POST", body: { name: f.get("name") } }), "Workspace renamed."));

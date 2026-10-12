@@ -32,6 +32,7 @@ TallyTime reads the documents of an export shipment (purchase order, commercial 
 - **REST API** with interactive documentation at `/docs`, so an ERP or a customs broker's system could submit documents directly.
 - **Server resource meters** in the top bar, as in Google Colab: CPU, RAM and GPU of the server, with how much TallyTime and the AI model use on hover. GPU is greyed out when the server has none.
 - **Interface** styled after the Wikimedia Codex design language, with the AI model in use named in the header.
+- **Dark mode:** follows the device's light or dark setting automatically, switching live when the device does. Account → Appearance can fix it to Light or Dark for a browser. Both themes meet WCAG AA text contrast on every page.
 
 ---
 
