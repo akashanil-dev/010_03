@@ -25,65 +25,60 @@ DEMO = ROOT / "data" / "demo"
 STATIC = ROOT / "static"
 
 app = FastAPI(title="TallyTime: Export Document Verification")
-SHIPMENTS: dict[str, dict] = store.load_all()   # working copy; every change is saved to SQLite
-for _s in SHIPMENTS.values():   # history saved before final verdicts existed
-    if _s.get("report") and "final" not in _s:
-        _s["final"] = report.final_verdict(_s["report"], _s.get("reviews", {}))
 LOCK = threading.Lock()           # the local model reads one document at a time
 
 
 @app.on_event("startup")
 def _startup():
+    store.init()
+    store.mark_interrupted()
     threading.Thread(target=warm_up, daemon=True).start()
 
 
-def _expand_bundles(s: dict):
+def _expand_bundles(sid: str, files: list[dict]) -> list[dict]:
     """Replace any merged PDF holding several documents with one entry per document."""
     expanded = []
-    for item in s["files"]:
+    for idx, item in enumerate(files):
         if Path(item["path"]).suffix.lower() != ".pdf":
-            item["state"] = "queued"
-            expanded.append(item)
+            expanded.append(item | {"state": "queued"})
             continue
-        item["state"] = "splitting"
+        store.update_file(sid, idx, state="splitting")
         try:
             with LOCK:
                 parts = split_bundle(Path(item["path"]), Path(item["path"]).parent)
         except Exception:
             parts = None
         if not parts:
-            item["state"] = "queued"
-            expanded.append(item)
+            expanded.append(item | {"state": "queued"})
             continue
         source_hash = file_hash(Path(item["path"]))
         for p in parts:
             expanded.append({"filename": p["filename"], "path": p["path"], "state": "queued",
                              "bundle": item["filename"], "pages": p["pages"],
                              "cache_key": f"{source_hash}_p{'-'.join(map(str, p['pages']))}"})
-    s["files"] = expanded
+    store.set_files(sid, expanded)
+    return expanded
 
 
 def _process(sid: str):
-    s = SHIPMENTS[sid]
-    _expand_bundles(s)
-    docs = []
-    for item in s["files"]:
-        item["state"] = "reading"
-        item["started"] = time.time()
+    s = store.get(sid)
+    if not s:   # deleted before it started
+        return
+    files = _expand_bundles(sid, s["files"])
+    docs, failed = [], []
+    for idx, item in enumerate(files):
+        started = time.time()
+        store.update_file(sid, idx, state="reading", started=started)
         try:
             with LOCK:
                 doc = process_file(Path(item["path"]), item["filename"], item.get("cache_key"))
             docs.append(doc)
-            item.update(state="done", doc_type=doc.doc_type, ocr_used=doc.ocr_used, source_format=doc.source_format,
-                        seconds=round(time.time() - item["started"], 1))
+            store.update_file(sid, idx, state="done", doc_type=doc.doc_type, ocr_used=doc.ocr_used,
+                              source_format=doc.source_format, seconds=round(time.time() - started, 1))
         except Exception as exc:  # keep going with the other documents
-            item.update(state="error", error=str(exc))
-    failed = [(i["filename"], i.get("error", "")) for i in s["files"] if i["state"] == "error"]
-    s["report"] = report.build(docs, failed)
-    s["label"] = _label(docs) or sid
-    s["final"] = report.final_verdict(s["report"], s["reviews"])
-    s["state"] = "done"
-    store.save(s)
+            store.update_file(sid, idx, state="error", error=str(exc))
+            failed.append((item["filename"], str(exc)))
+    store.finish(sid, report.build(docs, failed), _label(docs) or sid)
 
 
 def _label(docs) -> str:
@@ -108,8 +103,7 @@ def _start(files: list[tuple[str, Path]]) -> str:
         dst = folder / Path(name).name
         shutil.copyfile(src, dst)
         items.append({"filename": dst.name, "path": str(dst), "state": "queued"})
-    SHIPMENTS[sid] = {"id": sid, "created": time.time(), "state": "processing", "files": items, "report": None,
-                      "reviews": {}, "audit": []}
+    store.create(sid, items)
     threading.Thread(target=_process, args=(sid,), daemon=True).start()
     return sid
 
@@ -152,7 +146,7 @@ def demo(name: str):
 
 
 def _get(sid: str) -> dict:
-    s = SHIPMENTS.get(sid)
+    s = store.get(sid)
     if not s:
         raise HTTPException(404, "Shipment not found (it may have been deleted)")
     return s
@@ -194,10 +188,7 @@ def add_review(sid: str, review: Review):
         raise HTTPException(400, "A note is required to override a flag")
     name = " ".join(review.reviewer.split())[:60] or "Unnamed reviewer"
     entry = review.model_dump() | {"reviewer": name, "at": datetime.now().isoformat(timespec="seconds")}
-    s["reviews"][review.check_id] = entry
-    s["audit"].append(entry)
-    s["final"] = report.final_verdict(s["report"], s["reviews"])
-    store.save(s)
+    store.add_review(sid, entry)
     return {"ok": True}
 
 
@@ -216,7 +207,6 @@ def get_file(sid: str, filename: str):
 def delete_shipment(sid: str):
     _get(sid)
     shutil.rmtree(UPLOADS / sid, ignore_errors=True)
-    SHIPMENTS.pop(sid, None)
     store.delete(sid)
     return {"deleted": sid}
 
@@ -229,7 +219,7 @@ def info():
 
 @app.get("/api/dashboard")
 def dashboard():
-    return store.dashboard(list(SHIPMENTS.values()))
+    return store.dashboard(store.finished())
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
