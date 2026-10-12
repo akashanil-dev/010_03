@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About · TallyTime</title>
+<meta name="description" content="Why TallyTime exists: catching mismatches across export documents before customs or the buyer's bank does.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">TallyTime</span><span class="tagline">Export document verification</span></a>
+  <a class="btn small" href="/">Open TallyTime</a>
+</header>
+<main class="about">
+  <p class="eyebrow">ABOUT TALLYTIME</p>
+  <h1>One wrong number can hold up a whole shipment.</h1>
+  <p class="lead">An export shipment travels on a set of documents: the purchase order, commercial invoice, packing list, shipping bill,
+    quality or health certificate, certificate of origin and often a letter of credit. Different teams prepare them, at different times.
+    When the carton count, a weight, the HS code or the port does not match from one document to the next, customs queries the shipment
+    or the buyer's bank refuses the documents, and the exporter's money waits. TallyTime finds those mismatches <b>before</b> the documents go out.</p>
+
+  <section class="about-section" aria-labelledby="numbers">
+    <h2 id="numbers">Why it matters</h2>
+    <div class="about-stats">
+      <div class="about-stat">
+        <b>65–80%</b>
+        <span>of documents presented under letters of credit worldwide are refused on first presentation, according to the
+          International Chamber of Commerce. At the very least, that delays the exporter's payment.<sup><a href="#src-icc">1</a></sup></span>
+      </div>
+      <div class="about-stat">
+        <b>₹73,890 crore</b>
+        <span>of seafood exported from India in 2025-26 ($8.46 billion), an all-time high.<sup><a href="#src-mpeda">2</a></sup></span>
+      </div>
+      <div class="about-stat">
+        <b>66.5%</b>
+        <span>of those dollar earnings came from frozen shrimp, the product TallyTime's demo shipment is built around.<sup><a href="#src-mpeda">2</a></sup></span>
+      </div>
+      <div class="about-stat">
+        <b>Top 3</b>
+        <span>Kochi is one of India's three busiest ports for seafood cargo. The European Union, with its strict residue
+          limits, is the third-largest market ($1,592 million).<sup><a href="#src-mpeda">2</a></sup></span>
+      </div>
+    </div>
+    <p>Larger exporters can afford documentation teams and software to cross-check every set. Many small and mid-sized exporters in Kerala
+      check by eye, under deadline, across PDFs, spreadsheets and phone photos. TallyTime aims to give them the same safety net, for free.</p>
+  </section>
+
+  <section class="about-section" aria-labelledby="what">
+    <h2 id="what">What it does</h2>
+    <div class="about-grid">
+      <div class="card"><h3>Compares every fact</h3><p>Cartons, weights, values, HS codes, ports, Incoterms, names and references are lined up across
+        every document in one table. The value that disagrees with the rest is highlighted, with the exact text it was read from.</p></div>
+      <div class="card"><h3>Checks the letter of credit</h3><p>A set that agrees with itself can still break the LC. TallyTime checks it against the
+        credit's terms (UCP 600): amount and tolerance, latest shipment date, presentation deadline, ports and the documents the LC requires.</p></div>
+      <div class="card"><h3>Screens lab results</h3><p>A quality or health certificate that reports a banned antibiotic, such as chloramphenicol or a nitrofuran,
+        or ethylene oxide above the EU limit, is flagged as a blocking error before the cargo sails.</p></div>
+      <div class="card"><h3>Remembers the deadlines</h3><p>The LUT reference on the invoice, the RoDTEP and drawback claim that must be made on the shipping bill,
+        the export-proceeds deadline, and new rules for Kerala products such as EUDR due diligence for natural rubber going to the EU.</p></div>
+      <div class="card"><h3>Sends each fix to the right team</h3><p>Issues are grouped by who prepares the faulty document (warehouse, accounts, customs broker
+        or documentation) and can go out by WhatsApp or email, in English or <span lang="ml">മലയാളം</span> for the warehouse floor.</p></div>
+      <div class="card"><h3>Keeps people in charge</h3><p>Every flag is confirmed or overridden by a person, overrides need a reason, and every decision is
+        recorded. The report shows the final verdict after review, including what was overridden.</p></div>
+    </div>
+  </section>
+
+  <section class="about-section" aria-labelledby="how">
+    <h2 id="how">AI reads, rules judge</h2>
+    <ol class="about-steps">
+      <li><b>Read.</b> Documents in any common format (digital or scanned PDF, photo, Excel, Word or CSV) are converted to text. A merged PDF is split into its documents.</li>
+      <li><b>Extract.</b> IBM Granite, an open AI model running on TallyTime's own server, copies each field exactly as printed. Every value is then searched for in the source text, and anything not found word for word is marked "check by hand".</li>
+      <li><b>Judge.</b> Plain, inspectable rules decide every pass or fail. The AI never decides whether a shipment is ready.</li>
+      <li><b>Review.</b> A person confirms or overrides each flag, and the report records it.</li>
+    </ol>
+    <p class="muted">No outside AI service sees your documents, phone numbers and email addresses inside them are hidden before reading,
+      and everything is deleted after 7 days. See the <a href="/privacy.html">Privacy Policy</a>.</p>
+  </section>
+
+  <section class="about-section" aria-labelledby="results">
+    <h2 id="results">How well it works so far</h2>
+    <p>On the team's synthetic demo shipment (a frozen-shrimp export from Kochi to Rotterdam with eight hidden problems), TallyTime catches
+      <b>all 8 planted issues</b> and raises <b>no false flags</b> on the clean version: the same with a scanned packing list, a tilted phone photo,
+      an Excel invoice, or all six documents merged into one PDF. It also catches a letter of credit the documents break, and a lab certificate
+      reporting a banned antibiotic.</p>
+    <p class="muted">These are documents written by the team with fictitious companies, so this shows the system works end to end. It is not yet a
+      measure of accuracy on real shipments. TallyTime is decision support, not legal or customs advice: a licensed customs broker makes the final call.</p>
+  </section>
+
+  <section class="about-section" aria-labelledby="free">
+    <h2 id="free">Free to use</h2>
+    <p>Every account gets 5 checks a day, plus unlimited demo shipments, and colleagues can review together in a shared workspace.
+      TallyTime runs on a single server without a GPU, so checks wait their turn in a queue and each new document takes about a minute.
+      If your organisation would like to run a pilot, or can help with computing power so checks run faster, write to
+      <a href="mailto:privacy@akashanil.dev">privacy@akashanil.dev</a>.</p>
+  </section>
+
+  <section class="about-section" aria-labelledby="team">
+    <h2 id="team">Who built it</h2>
+    <p>TallyTime was built for the <b>KeralAI Grand Challenge 2026</b>, Challenge 3: Export Document Verification System,
+      by <b>Team Ayalvasis (Team 10)</b>, Akash A.</p>
+  </section>
+
+  <section class="about-sources" aria-labelledby="sources">
+    <h2 id="sources">Sources</h2>
+    <ol>
+      <li id="src-icc">International Chamber of Commerce Banking Commission, <a href="https://library.iccwbo.org/content/tfb/BRIEFINGS/20220627_TA_Briefing_No3_reducing_discrepancy_rates.pdf">Technical Advisory Briefing No. 3: Reducing discrepancy rates under Documentary Credits</a>, 27 June 2022.</li>
+      <li id="src-mpeda">Marine Products Export Development Authority (MPEDA), <a href="https://mpeda.gov.in/wp-content/uploads/2026/06/MPEDA_2025-26_Export_Figures_ENGLISH_June-1.pdf">India's seafood exports net US$ 8.46 billion in 2025-26</a>, press release, Kochi, 1 June 2026.</li>
+    </ol>
+  </section>
+
+  <p class="muted"><a href="/">Open TallyTime</a> · <a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Use</a></p>
+</main>
+<footer class="foot">TallyTime is decision support, not legal or customs advice. A licensed customs broker makes the final call.</footer>
+</body>
+</html>

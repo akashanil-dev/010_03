@@ -518,7 +518,7 @@ function renderAccount() {
       <form id="f-delete" class="form inline"><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Delete my account</button></form>
     </div>
 
-    <p class="muted small wide"><a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Use</a></p>`;
+    <p class="muted small wide"><a href="/about.html">About TallyTime</a> · <a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Use</a></p>`;
 
   const run = async (work, ok) => { try { await work(); if (ok) toast(ok); await refreshMe(); renderAccount(); } catch (e) { toast(e.message, { kind: "error" }); } };
   const form = (id, fn) => { $(id).onsubmit = (e) => { e.preventDefault(); fn(new FormData(e.target)); }; };

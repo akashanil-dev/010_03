@@ -243,7 +243,7 @@ def test_api_docs_need_login():
     assert signed_up("Asha", "asha@example.com").get("/openapi.json").status_code == 200
 
 
-@pytest.mark.parametrize("path", ["/privacy.html", "/terms.html"])
-def test_legal_pages_are_public(path):
+@pytest.mark.parametrize("path", ["/privacy.html", "/terms.html", "/about.html"])
+def test_public_pages(path):
     r = client().get(path)
     assert r.status_code == 200 and config.CONTACT_EMAIL in r.text
