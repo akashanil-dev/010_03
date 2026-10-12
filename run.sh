@@ -20,28 +20,26 @@ if [ ! -f .env ]; then
   cp .env.example .env
   echo "Created .env from .env.example (local defaults)."
 fi
-# Stop everything this script started (Ollama if we started it, the web app, the worker and its reader)
+# Stop everything this script started (the web app, the worker and its reader) on exit or Ctrl+C
 trap 'trap - EXIT INT TERM; kill 0 2>/dev/null' EXIT INT TERM
 
-# The AI model: use a running Ollama, or start one (from the PATH or ~/.local/ollama/bin)
-OLLAMA_BIN=${OLLAMA_BIN:-$(command -v ollama || true)}
-[ -z "$OLLAMA_BIN" ] && [ -x "$HOME/.local/ollama/bin/ollama" ] && OLLAMA_BIN="$HOME/.local/ollama/bin/ollama"
+# The AI model: Ollama should already be running (as a service); if not, start it
 MODEL=$(sed -n 's/^OLLAMA_MODEL=//p' .env | head -1)
 MODEL=${MODEL:-granite4:micro}
 ollama_up() { curl -s -m 2 http://localhost:11434/api/version >/dev/null; }
 if ! ollama_up; then
-  if [ -n "$OLLAMA_BIN" ]; then
-    echo "Starting Ollama ($OLLAMA_BIN); its log is in data/ollama.log"
-    mkdir -p data
-    "$OLLAMA_BIN" serve >> data/ollama.log 2>&1 &
-    for _ in $(seq 1 30); do ollama_up && break; sleep 0.5; done
+  if systemctl --user cat ollama.service >/dev/null 2>&1; then
+    systemctl --user start ollama
+  elif command -v ollama >/dev/null; then
+    ollama serve >/dev/null 2>&1 &   # stopped again when this script exits
   fi
+  for _ in $(seq 1 30); do ollama_up && break; sleep 0.5; done
 fi
 if ! ollama_up; then
   echo "Warning: Ollama is not running. Demos still load from the cache, but new documents cannot be read."
-  echo "         Install it (https://ollama.com/download), or set OLLAMA_BIN=/path/to/ollama."
-elif [ -n "$OLLAMA_BIN" ] && ! "$OLLAMA_BIN" list 2>/dev/null | grep -q "^$MODEL"; then
-  echo "Warning: the model $MODEL is not downloaded. Run: $OLLAMA_BIN pull $MODEL"
+  echo "         Install it from https://ollama.com/download, then run this again."
+elif command -v ollama >/dev/null && ! ollama list 2>/dev/null | grep -q "^$MODEL"; then
+  echo "Warning: the model $MODEL is not downloaded. Run: ollama pull $MODEL"
 fi
 
 "$PY" -m uvicorn app.main:app --port "$PORT" 2>&1 | sed -u 's/^/[web]    /' &

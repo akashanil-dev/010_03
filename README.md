@@ -98,7 +98,7 @@ pytest -q
 
 ### A. Starting TallyTime each time
 
-After the one-time setup above, every session is one command from the project folder. It also starts Ollama if it is not already running (found on the `PATH` or in `~/.local/ollama/bin`; set `OLLAMA_BIN` for another location), and stops it again on exit:
+After the one-time setup above, every session is one command from the project folder. If Ollama is not already running, it starts it (the `ollama` systemd service if there is one, otherwise `ollama serve` until you stop TallyTime):
 
 ```bash
 ./run.sh
