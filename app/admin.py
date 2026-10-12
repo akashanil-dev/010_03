@@ -7,6 +7,7 @@
     python -m app.admin verify EMAIL            confirm an email by hand (if the email never arrived)
     python -m app.admin delete-user EMAIL       delete an account, its workspace and its shipments
     python -m app.admin sweep                   run the retention sweep now
+    python -m app.admin test-email EMAIL        send a test email, showing any SMTP error
 """
 
 import sys
@@ -39,6 +40,19 @@ def users() -> None:
                   f"limit {limit:<14} since {time.strftime('%Y-%m-%d', time.localtime(r['created']))}")
 
 
+def test_email(to: str) -> None:
+    from . import mailer
+
+    if not config.SMTP_HOST:
+        sys.exit("SMTP_HOST is not set in .env, so emails are only written to the log.")
+    print(f"Sending through {config.SMTP_HOST}:{config.SMTP_PORT} as {config.SMTP_USER[:24]}... from {config.MAIL_FROM}")
+    try:
+        mailer.send(to, "TallyTime test email", "If you can read this, TallyTime can send email.", raise_errors=True)
+    except Exception as e:
+        sys.exit(f"Failed: {type(e).__name__}: {e}")
+    print(f"Sent to {to}. Check the inbox (and the spam folder).")
+
+
 def _user(email: str) -> dict:
     user = accounts.user_by_email(email)
     if not user:
@@ -68,6 +82,8 @@ def main(argv: list[str]) -> None:
         print(f"Deleted {args[0]} and their workspace.")
     elif cmd == "sweep":
         print(retention.sweep())
+    elif cmd == "test-email" and len(args) == 1:
+        test_email(args[0])
     else:
         print(__doc__)
 

@@ -30,10 +30,36 @@ Allow about an hour. Most of that is downloads.
 Add an **A record**: `tallytime` → the VM's public IP, on the DNS for `akashanil.dev`. Wait until `dig +short tallytime.akashanil.dev` prints the IP.
 `.dev` domains only work over HTTPS. Caddy gets the certificate automatically once DNS points at the VM.
 
-### Brevo (email)
-1. **Senders, Domains & Dedicated IPs → Domains → Add a domain:** `akashanil.dev`. Add the DKIM, SPF and DMARC records Brevo shows you to your DNS, then click *Authenticate*. Without these, emails land in spam.
-2. **SMTP & API → SMTP → Generate a new SMTP key.** Note the **login** (an address like `xxxx@smtp-brevo.com`) and the **key**. The key is the password; it is shown once.
-3. The free plan sends 300 emails a day. Each sign-up uses one email. "Check finished" emails are off by default, and each person turns them on themselves.
+### Oracle Email Delivery (email)
+TallyTime sends its emails (sign-up confirmation, password reset, invitations, optional "check finished") through OCI Email
+Delivery, in the same Oracle account as the VM. It adds no branding to emails. Do these steps **in the same region as the VM**
+(top-right region menu in the OCI console).
+
+1. **Email domain.** Menu → **Developer Services → Email Delivery → Email Domains → Create Email Domain**: `akashanil.dev`, in your compartment.
+2. **DKIM** (proves the emails really come from you). Open the email domain → **DKIM → Add DKIM**, selector for example `tallytime-202610`
+   (it must be unique; a date suffix makes later key rotation easy) → **Generate DKIM Record**. Add the **CNAME** record it shows to the
+   DNS of `akashanil.dev`, exactly as given. Back in the console, the DKIM status turns **Active** once DNS has updated (minutes to a few hours).
+3. **SPF** (lists who may send for the domain). Add a **TXT** record on `akashanil.dev` for the VM's region:
+   - Asia/Pacific (Mumbai, Hyderabad, Singapore…): `v=spf1 include:ap.rp.oracleemaildelivery.com ~all`
+   - Europe: `v=spf1 include:eu.rp.oracleemaildelivery.com ~all`
+   - Americas: `v=spf1 include:rp.oracleemaildelivery.com ~all`
+
+   A domain can have only **one** SPF record: if `akashanil.dev` already has a `v=spf1 …` TXT record (for example for your own mailbox),
+   add the `include:…` part to that record instead of creating a second one. The email domain page shows whether SPF is configured.
+4. **DMARC** (optional but recommended; tells mailbox providers what to do with failures). TXT record on `_dmarc.akashanil.dev`:
+   `v=DMARC1; p=none; rua=mailto:privacy@akashanil.dev`
+5. **Approved sender.** Email Delivery → **Approved Senders → Create Approved Sender**: `no-reply@akashanil.dev`. Emails can only be sent
+   from approved senders, so this must match `MAIL_FROM` exactly.
+6. **SMTP credentials.** Profile menu (top right) → **My profile → SMTP Credentials → Generate SMTP Credentials**, description `tallytime`.
+   Copy the **username** (a long `ocid1.user…` string) and the **password**: the password is shown **only once**.
+   The account administrator can send straight away; any other user needs an IAM policy such as
+   `Allow group <group> to use email-family in compartment <compartment>`.
+7. **SMTP server address.** Email Delivery → **Configuration**: note the **public endpoint**, for example
+   `smtp.email.ap-mumbai-1.oci.oraclecloud.com`. Use port **587** (STARTTLS).
+
+The Always Free allowance is reported as 3,000 emails a month; check your tenancy's actual limit under **Governance → Limits, Quotas and
+Usage → Email Delivery**, and request an increase there if needed. "Check finished" emails are off by default, and each person turns them
+on themselves, so sign-ups and password resets are most of the volume.
 
 ### Cloudflare Turnstile (bot check on sign-up)
 Cloudflare dashboard → **Turnstile → Add widget**: hostname `tallytime.akashanil.dev`, mode *Managed*. Note the **site key** and **secret key**. It's free and works even though your DNS is not on Cloudflare.
@@ -72,10 +98,10 @@ Set at least:
 
 ```ini
 PUBLIC_URL=https://tallytime.akashanil.dev
-SMTP_HOST=smtp-relay.brevo.com
+SMTP_HOST=<public endpoint, e.g. smtp.email.ap-mumbai-1.oci.oraclecloud.com>
 SMTP_PORT=587
-SMTP_USER=<Brevo SMTP login>
-SMTP_PASSWORD=<Brevo SMTP key>
+SMTP_USER=<SMTP credentials username, the ocid1.user… string>
+SMTP_PASSWORD=<SMTP credentials password>
 MAIL_FROM=TallyTime <no-reply@akashanil.dev>
 TURNSTILE_SITE_KEY=<site key>
 TURNSTILE_SECRET=<secret key>
@@ -88,6 +114,19 @@ CONTACT_EMAIL=privacy@akashanil.dev
 ```bash
 sudo systemctl restart tallytime-web tallytime-worker
 ```
+
+Check that email works (it shows the exact error if it does not):
+
+```bash
+cd /opt/tallytime && sudo -u tallytime .venv/bin/python -m app.admin test-email you@example.com
+```
+
+| Error | Meaning |
+|---|---|
+| `SMTPAuthenticationError` (535) | Wrong SMTP username or password: generate new SMTP credentials |
+| `SMTPSenderRefused`, or "not an approved sender" | `MAIL_FROM` is not exactly an approved sender in this region |
+| Timeout or connection refused | Wrong `SMTP_HOST` (region), or outbound port 587 blocked |
+| Sent, but lands in spam | DKIM not yet Active, or SPF missing: check the email domain page |
 
 ## 4. Check it works
 

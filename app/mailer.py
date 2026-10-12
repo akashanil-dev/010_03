@@ -1,4 +1,5 @@
-"""Outgoing email through Brevo's SMTP relay. Without SMTP settings, emails are logged instead (development).
+"""Outgoing email through an SMTP relay (Oracle Cloud Email Delivery in production). Without SMTP settings, emails
+are logged instead (development).
 
 Emails never contain document contents: only links back to the site.
 """
@@ -17,7 +18,7 @@ log = logging.getLogger("tallytime.mail")
 SENT: list[dict] = []   # development and tests: what would have been sent
 
 
-def send(to: str, subject: str, text: str) -> None:
+def send(to: str, subject: str, text: str, raise_errors: bool = False) -> None:
     if not config.SMTP_HOST:
         SENT.append({"to": to, "subject": subject, "text": text})
         log.warning("Email (SMTP not configured) to %s: %s\n%s", to, subject, text)
@@ -32,6 +33,8 @@ def send(to: str, subject: str, text: str) -> None:
             s.login(config.SMTP_USER, config.SMTP_PASSWORD)
             s.send_message(msg)
     except Exception:
+        if raise_errors:
+            raise
         log.exception("Could not send email to %s", to)
 
 

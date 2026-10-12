@@ -30,8 +30,7 @@
 
 | Service | Use |
 |---|---|
-| Oracle Cloud Infrastructure (Always Free) | Hosting |
-| [Brevo](https://www.brevo.com) | Sending account and notification emails |
+| Oracle Cloud Infrastructure (Always Free) | Hosting, and sending account and notification emails (Email Delivery) |
 | [Cloudflare Turnstile](https://www.cloudflare.com/products/turnstile/) | Bot check on sign-up and password reset |
 | Let's Encrypt (through Caddy) | HTTPS certificate |
 

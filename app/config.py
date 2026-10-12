@@ -28,7 +28,7 @@ TIMEZONE = os.getenv("QUOTA_TIMEZONE", "Asia/Kolkata")
 RETENTION_DAYS = _int("RETENTION_DAYS", 7)
 TERMS_VERSION = "2026-10-12"   # bump when the terms or privacy policy change; users re-accept
 
-# Email through Brevo SMTP. Without SMTP_HOST, emails are written to the log instead (development).
+# Email through an SMTP relay (Oracle Cloud Email Delivery). Without SMTP_HOST, emails are written to the log (development).
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = _int("SMTP_PORT", 587)
 SMTP_USER = os.getenv("SMTP_USER", "")

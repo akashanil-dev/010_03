@@ -76,7 +76,7 @@ if [ ! -f "$APP/.env" ]; then
   sed -i "s|^PUBLIC_URL=.*|PUBLIC_URL=https://$DOMAIN|" .env
   sed -i "s|^VAPID_PUBLIC_KEY=.*|$(echo "$KEYS" | grep PUBLIC)|; s|^VAPID_PRIVATE_KEY=.*|$(echo "$KEYS" | grep PRIVATE)|" .env
   chmod 600 .env
-  echo "Created $APP/.env with push keys. Fill in the Brevo and Turnstile settings before going live."
+  echo "Created $APP/.env with push keys. Fill in the email (Oracle Email Delivery) and Turnstile settings before going live."
 fi
 
 say "Services"

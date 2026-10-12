@@ -329,7 +329,7 @@ PDF ──► Docling (layout, tables, OCR)
 | `app/accounts.py`, `app/auth.py` | Accounts, sessions, email links, workspaces and invitations; the sign-in and account API |
 | `app/jobs.py`, `app/worker.py` | The queue with daily quotas, and the worker: one check at a time, a killable reader process, timeouts |
 | `app/progress.py` | Progress and time estimates, learned from how long each stage takes on this machine |
-| `app/notify.py`, `app/mailer.py` | Web Push and email notifications; Brevo SMTP and the Turnstile bot check |
+| `app/notify.py`, `app/mailer.py` | Web Push and email notifications; SMTP email (Oracle Email Delivery) and the Turnstile bot check |
 | `app/retention.py`, `app/cache.py` | 7-day erasure of shipments and per-workspace reading caches |
 | `app/system.py` | Server CPU, RAM and GPU use for the top-bar meters, split into TallyTime, the AI model and the rest |
 | `app/limits.py`, `app/config.py`, `app/admin.py` | Request rate limits, settings from `.env`, and the server admin command |
@@ -370,7 +370,7 @@ The public deployment adds settings for the site address, limits, email, the bot
 | `MAX_ACTIVE_PER_USER` | `3` | Checks one account can have running or waiting at once |
 | `DOC_TIMEOUT`, `SHIPMENT_TIMEOUT`, `QUEUE_TIMEOUT` | `300`, `1800`, `7200` | Seconds before a document, a running check, or a waiting check is stopped |
 | `RETENTION_DAYS` | `7` | Days before uploads, results, reviews and the audit log are erased |
-| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | empty | Brevo SMTP relay. Empty: emails are printed to the log |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | empty | SMTP relay (Oracle Cloud Email Delivery on the server). Empty: emails are printed to the log. Test with `python -m app.admin test-email you@example.com` |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` | empty | Cloudflare Turnstile on sign-up and password reset. Empty: no bot check |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | empty | Web Push keys from `python -m app.notify keys`. Empty: notifications only while a tab is open |
 
@@ -381,7 +381,7 @@ Restart TallyTime (both processes) after changing `.env`.
 ## Public deployment
 
 TallyTime is set up to run publicly at **https://tallytime.akashanil.dev** on an Oracle Cloud Always Free Ampere VM (4 ARM cores, 24 GB RAM): Caddy for HTTPS,
-the web app, one worker and Ollama on the same machine, with SQLite. [DEPLOY.md](DEPLOY.md) has the full steps, from DNS and Brevo to backups.
+the web app, one worker and Ollama on the same machine, with SQLite. [DEPLOY.md](DEPLOY.md) has the full steps, from DNS and email (Oracle Email Delivery) to backups.
 
 ---
 
